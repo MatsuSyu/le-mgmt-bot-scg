@@ -1,0 +1,18 @@
+# Development Rules
+- **Architecture**: 
+  - Google Apps Script (GAS) は一切禁止。ロジックは Firebase Functions (Python) に集約せよ。
+  - データベースは Firestore を Single Source of Truth とし、Sheets は閲覧用 View として扱う。
+- **Security**: 
+  - 児童のプライバシー（氏名、住所等）は Gemini へのプロンプト送信前にマスキング、または最小限の情報に絞り込め。
+- **Reliability**: 
+  - 全ての外部連携（LINE/Gmail/Sheets）には例外処理を実装し、エラー時は管理者に「エラー報告（野球の比喩：エラー発生！バックアップお願いします！）」を飛ばすこと。
+- **Testing & Verification Strategy**:
+  - 【バックエンド単体テスト】: ロジック実装時は必ず自動テストコード（例: `pytest`等）を作成すること。手持のWeb動作確認に依存してはならない。
+  - 【LINE Bot連携モックテスト】: LINE Webhookのペイロード送信やMessaging APIの呼び出しは、実際にLINEを送信する前に `unittest.mock` 等を用いてモック化し、ロジックの正確性を検証すること。
+  - 【デグレード検証】: 既存コードの修正・新機能追加時は、必ず既存の単体テストスイートを全件パスさせることを絶対条件とする。
+- **Version Control & Deployment**:
+  - 【GitHub管理とコミットルール】: ソースコードは必ずGitHubで管理する。コミットメッセージは `Conventional Commits` のルールに従い、`feat:`, `fix:`, `docs:`, `test:`, `refactor:` などのプレフィックスを用いて論理的な単位で記録すること。
+  - 【Firebaseデプロイ制約】: Firebase (Functions/Hosting) へのデプロイ（`firebase deploy`）は、Testerエージェントによる**全ての自動テストとデグレード検証がパスした後**でのみ許可される。テスト未通過でのデプロイは固く禁ずる。
+- **Development Pipeline**: 
+  - 【厳格な制約】いかなる機能の実装時も、直ちにコードを書き始めてはならない。
+  - 必ず `DEV_AGENTS.md` に定義されたパイプライン（Planner検討 → Reviewer点検 → Verifier確認 → 実装 → Tester検証 → Deployerリリース）を順に実行し、思考と検証のプロセスを残すこと。
