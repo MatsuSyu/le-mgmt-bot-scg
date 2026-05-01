@@ -30,6 +30,10 @@ function App() {
   const presentCount = records.filter(r => r.status === '出席').length
   const absentCount = records.filter(r => r.status === '欠席').length
 
+  const wantRideCount = records.filter(r => r.car_info?.mode === '同乗希望').length
+  const seatsAvailable = records.filter(r => r.car_info?.mode === '車出し可能').reduce((acc, r) => acc + (r.car_info?.seats || 3), 0)
+  const carpoolShortage = Math.max(0, wantRideCount - seatsAvailable)
+
   return (
     <div className="dashboard-container">
       <header className="header">
@@ -44,6 +48,7 @@ function App() {
           present={presentCount} 
           absent={absentCount} 
           total={records.length} 
+          carpoolShortage={carpoolShortage}
         />
         
         <AttendanceTable records={records} />

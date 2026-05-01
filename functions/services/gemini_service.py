@@ -58,7 +58,30 @@ class GeminiService:
             
             return json.loads(text)
         except Exception as e:
-            return {
-                "error": f"Failed to parse Gemini response: {str(e)}",
-                "raw_response": response.text
-            }
+            return {"error": str(e), "message": "解析エラーが発生しました。"}
+
+    def generate_carpool_appeal(self, shortage_count: int, date_str: str) -> str:
+        """
+        Generates a recruitment message for carpool shortage using Score Assistant persona.
+        """
+        prompt = f"""
+        あなたは「少年野球チームの副事務局長 スコア・アシスタント」です。
+        以下の状況に基づいて、チームのLINEグループに流す「配車協力のお願い」を作成してください。
+
+        状況:
+        - 日程: {date_str}
+        - 不足している座席数: {shortage_count}席
+
+        条件:
+        - キャラクター設定（AGENT.md）を守ること。
+        - 熱血で前向き、かつ保護者への配慮があること。
+        - 「ナイス連携」「プレイボール」などの野球用語を適度に入れること。
+        - 3行〜5行程度で。
+        """
+        try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            print(f"Gemini generation error: {str(e)}")
+            return f"【SOS】{date_str}の配車が{shortage_count}席不足しています！ご協力お願いします！"

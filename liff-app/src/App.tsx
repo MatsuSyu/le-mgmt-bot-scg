@@ -3,8 +3,9 @@ import liff from '@line/liff'
 import './index.css'
 
 function App() {
-  const [status, setStatus] = useState<'出席' | '欠席' | ''>('')
+  const [status, setStatus] = useState<'出席' | '欠席' | '遅刻' | '早退' | ''>('')
   const [carMode, setCarMode] = useState<'車出し可能' | '同乗希望' | '不要' | ''>('')
+  const [remarks, setRemarks] = useState('')
   const [userId, setUserId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -40,7 +41,8 @@ function App() {
           user_id: userId,
           schedule_id: "2024-05-12-practice", // Mock schedule
           status: status,
-          car_info: { mode: carMode }
+          car_info: { mode: carMode },
+          remarks: remarks
         })
       });
 
@@ -82,6 +84,18 @@ function App() {
           >
             🏠 欠席
           </div>
+          <div 
+            className={`option-card ${status === '遅刻' ? 'selected' : ''}`}
+            onClick={() => setStatus('遅刻')}
+          >
+            🏃‍♂️ 遅刻
+          </div>
+          <div 
+            className={`option-card ${status === '早退' ? 'selected' : ''}`}
+            onClick={() => setStatus('早退')}
+          >
+            👋 早退
+          </div>
         </div>
       </div>
 
@@ -107,6 +121,17 @@ function App() {
             🚲 送迎不要・自力
           </div>
         </div>
+      </div>
+
+      <div className="form-group">
+        <label className="label">コーチへの伝言（備考）</label>
+        <textarea 
+          style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #edf2f4' }}
+          rows={3}
+          placeholder="例：10時頃に早退します"
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+        />
       </div>
 
       <button 
