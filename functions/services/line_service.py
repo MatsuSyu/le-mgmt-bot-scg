@@ -1,10 +1,13 @@
 import os
-import requests
+import logging
 from typing import Optional
+from linebot import LineBotApi
+from linebot.models import TextSendMessage
 
 class LineService:
-    def __init__(self, channel_access_token: Optional[str] = None):
-        self.token = channel_access_token or os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+    def __init__(self):
+        self.line_bot_api = LineBotApi(os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "your-token"))
+        self.admin_group_id = os.environ.get("LINE_ADMIN_GROUP_ID", "your-group-id")
         self.api_url_push = "https://api.line.me/v2/bot/message/push"
         self.api_url_reply = "https://api.line.me/v2/bot/message/reply"
 

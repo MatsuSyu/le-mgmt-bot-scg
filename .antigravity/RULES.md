@@ -1,7 +1,11 @@
 # Development Rules
-- **Architecture**: 
-  - Google Apps Script (GAS) は一切禁止。ロジックは Firebase Functions (Python) に集約せよ。
-  - データベースは Firestore を Single Source of Truth とし、Sheets は閲覧用 View として扱う。
+- **Architecture- **No-GAS Policy**: Google Apps Scriptでのロジック実装は禁止。全てのスクリプトはFirebase Functions (Python) で実行し、Sheets API経由で操作すること。
+- **Error Handling & Logging**: 全ての例外は `try-except` で捕捉し、Cloud Loggingで追跡可能な形でログ出力すること。エラー時は管理者に「エラー報告（野球の比喩：エラー発生！バックアップお願いします！）」を飛ばす。
+
+## 開発の三原則
+1. **Security**: LINE署名検証、APIキーの環境変数管理、個人情報の最小化を徹底する。
+2. **Maintainability**: クラス・サービス単位での責務分割、型ヒントの活用、`pytest` による網羅的なテストコードを維持する。
+3. **Performance**: API呼び出しの最適化、フロントエンドの軽量化（Vite活用）、不要なループの排除を行い、レスポンスの速さを追求する。
 - **Security**: 
   - 児童のプライバシー（氏名、住所等）は Gemini へのプロンプト送信前にマスキング、または最小限の情報に絞り込め。
 - **Reliability**: 

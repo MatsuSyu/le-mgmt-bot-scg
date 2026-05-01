@@ -1,6 +1,7 @@
 import os
 import json
-from firebase_functions import https_fn
+import logging
+from firebase_functions import https_fn, options
 from firebase_admin import initialize_app
 from services.gemini_service import GeminiService
 from services.line_service import LineService
@@ -40,46 +41,34 @@ def line_webhook(req: https_fn.Request) -> https_fn.Response:
 
         return https_fn.Response("OK")
     except Exception as e:
-        print(f"Webhook error: {str(e)}")
+        logging.error(f"LINE Webhook error: {str(e)}", exc_info=True)
         return https_fn.Response("Internal Error", status=500)
 
 @https_fn.on_request()
 def submit_attendance(req: https_fn.Request) -> https_fn.Response:
-    """
-    Handles attendance submission from LIFF.
-    Flow: Firestore -> Sheets -> LINE Notification.
-    """
     try:
         data = req.get_json()
+        logging.info(f"Received attendance submission: {json.dumps(data)}")
+        
         user_id = data.get("user_id")
         schedule_id = data.get("schedule_id")
         status = data.get("status")
         car_info = data.get("car_info")
-
-        if not all([user_id, schedule_id, status]):
-            return https_fn.Response("Missing fields", status=400)
-
-        # 1. Save to Firestore
-        firestore = FirestoreService()
-        if not firestore.update_attendance(user_id, schedule_id, status, car_info):
-            return https_fn.Response("Firestore update failed", status=500)
-
-        # 2. Sync to Google Sheets (Simple sync for now)
-        # In real case, we might fetch all attendance and overwrite
-        sheets = SheetsService()
-        # placeholder for data list
-        all_data = [["User ID", "Status", "Car"]] + [[user_id, status, str(car_info)]]
-        sheets.sync_attendance_to_sheet("Attendance", all_data)
-
-        # 3. Notify LINE (Success message)
-        line = LineService()
-        line.send_admin_notification(f"【出欠】{user_id}さんが『{status}』で登録しました！")
-
-        return https_fn.Response(json.dumps({"success": True}), content_type="application/json")
-
+        remarks = data.get("remarks", "")
+        
+        firestore_service = FirestoreService()
+        firestore_service.update_attendance(user_id, schedule_id, status, car_info, remarks)
+        
+        sheets_service = SheetsService()
+        sheets_service.sync_attendance_to_sheets(schedule_id)
+        
+        line_service = LineService()
+        line_service.send_broadcast(f"【出欠連絡】{user_id}さんが{status}（配車：{car_info.get('mode')}）を登録しました！ナイスプレー！\n備考：{remarks}")
+        
+        return https_fn.Response(json.dumps({"status": "success"}), mimetype="application/json")
     except Exception as e:
-        print(f"Submission error: {str(e)}")
-        return https_fn.Response("Internal Error", status=500)
+        logging.error(f"Submission error: {str(e)}", exc_info=True)
+        return https_fn.Response(json.dumps({"status": "error", "message": str(e)}), status=500, mimetype="application/json")
 
 @https_fn.on_request()
 def handle_gmail_webhook(req: https_fn.Request) -> https_fn.Response:

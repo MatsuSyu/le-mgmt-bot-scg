@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import google.generativeai as genai
 from typing import Dict, Any, Optional
 
@@ -58,6 +59,7 @@ class GeminiService:
             
             return json.loads(text)
         except Exception as e:
+            logging.error(f"Gemini extraction error: {str(e)}", exc_info=True)
             return {"error": str(e), "message": "解析エラーが発生しました。"}
 
     def generate_carpool_appeal(self, shortage_count: int, date_str: str) -> str:
@@ -83,5 +85,5 @@ class GeminiService:
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
-            print(f"Gemini generation error: {str(e)}")
+            logging.error(f"Gemini generation error: {str(e)}", exc_info=True)
             return f"【SOS】{date_str}の配車が{shortage_count}席不足しています！ご協力お願いします！"
