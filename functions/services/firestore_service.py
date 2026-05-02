@@ -41,5 +41,40 @@ class FirestoreService:
             docs = self.db.collection("attendance").where("schedule_id", "==", schedule_id).stream()
             return [doc.to_dict() for doc in docs]
         except Exception as e:
-            print(f"Firestore query error: {str(e)}")
+            logging.error(f"Firestore query error: {str(e)}", exc_info=True)
             return []
+
+    # --- Members Management ---
+    def get_member(self, user_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            doc = self.db.collection("members").document(user_id).get()
+            return doc.to_dict() if doc.exists else None
+        except Exception as e:
+            logging.error(f"Error fetching member {user_id}: {str(e)}", exc_info=True)
+            return None
+
+    def update_member(self, user_id: str, data: Dict[str, Any]) -> bool:
+        try:
+            self.db.collection("members").document(user_id).set(data, merge=True)
+            return True
+        except Exception as e:
+            logging.error(f"Error updating member {user_id}: {str(e)}", exc_info=True)
+            return False
+
+    # --- Schedules Management ---
+    def get_schedule(self, schedule_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            doc = self.db.collection("schedules").document(schedule_id).get()
+            return doc.to_dict() if doc.exists else None
+        except Exception as e:
+            logging.error(f"Error fetching schedule {schedule_id}: {str(e)}", exc_info=True)
+            return None
+
+    # --- Car Management ---
+    def get_car_info(self, user_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            doc = self.db.collection("cars").document(user_id).get()
+            return doc.to_dict() if doc.exists else None
+        except Exception as e:
+            logging.error(f"Error fetching car info for {user_id}: {str(e)}", exc_info=True)
+            return None

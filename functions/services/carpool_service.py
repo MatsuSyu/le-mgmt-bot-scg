@@ -20,6 +20,7 @@ class CarpoolService:
             seats_available = 0
             
             for r in records:
+                user_id = r.get("user_id")
                 status = r.get("status")
                 car_info = r.get("car_info", {})
                 mode = car_info.get("mode")
@@ -28,7 +29,12 @@ class CarpoolService:
                     if mode == "同乗希望":
                         want_ride += 1
                     elif mode == "車出し可能":
-                        seats_available += car_info.get("seats", 3)
+                        # Try to get registered car capacity, fallback to provided or default
+                        registered_car = self.firestore.get_car_info(user_id)
+                        if registered_car:
+                            seats_available += registered_car.get("max_seats", 5) - 1 # -1 for driver
+                        else:
+                            seats_available += car_info.get("seats", 3)
 
             shortage = want_ride - seats_available
             
