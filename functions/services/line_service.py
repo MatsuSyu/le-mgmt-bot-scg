@@ -1,13 +1,12 @@
 import os
 import logging
+import requests
 from typing import Optional
-from linebot import LineBotApi
-from linebot.models import TextSendMessage
 
 class LineService:
     def __init__(self):
-        self.line_bot_api = LineBotApi(os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "your-token"))
-        self.admin_group_id = os.environ.get("LINE_ADMIN_GROUP_ID", "your-group-id")
+        self.token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+        self.admin_group_id = os.environ.get("LINE_ADMIN_GROUP_ID")
         self.api_url_push = "https://api.line.me/v2/bot/message/push"
         self.api_url_reply = "https://api.line.me/v2/bot/message/reply"
 
@@ -21,9 +20,9 @@ class LineService:
         """
         Sends a push message to the admin group/user.
         """
-        target_id = admin_group_id or os.environ.get("LINE_ADMIN_GROUP_ID")
+        target_id = admin_group_id or self.admin_group_id
         if not self.token or not target_id:
-            print("LINE_CHANNEL_ACCESS_TOKEN or LINE_ADMIN_GROUP_ID is not set.")
+            logging.error("LINE_CHANNEL_ACCESS_TOKEN or LINE_ADMIN_GROUP_ID is not set.")
             return False
 
         headers = self._get_headers()
@@ -42,7 +41,7 @@ class LineService:
             response.raise_for_status()
             return True
         except Exception as e:
-            print(f"Failed to send LINE notification: {str(e)}")
+            logging.error(f"Failed to send LINE notification: {str(e)}", exc_info=True)
             return False
 
     def reply_message(self, reply_token: str, message: str) -> bool:
@@ -68,5 +67,5 @@ class LineService:
             response.raise_for_status()
             return True
         except Exception as e:
-            print(f"Failed to reply LINE message: {str(e)}")
+            logging.error(f"Failed to reply LINE message: {str(e)}", exc_info=True)
             return False

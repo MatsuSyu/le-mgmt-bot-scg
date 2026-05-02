@@ -8,15 +8,16 @@ class SheetsService:
     def __init__(self, spreadsheet_id: Optional[str] = None):
         self.spreadsheet_id = spreadsheet_id or os.environ.get("GOOGLE_SHEET_ID")
         self.scopes = ['https://www.googleapis.com/auth/spreadsheets']
-        # In Firebase Functions, we can usually use the default credentials or a key file
-        # For simplicity in this skeleton, we assume the environment is authorized
         self.service = None
 
     def _get_service(self):
         if not self.service:
-            # Note: In production, you would use service_account.Credentials.from_service_account_info(...)
-            # or let the environment handle it if authorized.
-            self.service = build('sheets', 'v4')
+            try:
+                # Attempt to use default credentials (works on Firebase if set up)
+                self.service = build('sheets', 'v4')
+            except Exception as e:
+                logging.error(f"Failed to initialize Sheets service: {str(e)}", exc_info=True)
+                raise
         return self.service
 
     def sync_attendance_to_sheet(self, sheet_name: str, data: List[List[Any]]) -> bool:
@@ -24,7 +25,7 @@ class SheetsService:
         Overwrites or updates a specific sheet with attendance data.
         """
         if not self.spreadsheet_id:
-            print("GOOGLE_SHEET_ID is not set.")
+            logging.error("GOOGLE_SHEET_ID is not set.")
             return False
 
         try:
@@ -41,5 +42,5 @@ class SheetsService:
             ).execute()
             return True
         except Exception as e:
-            print(f"Sheets sync error: {str(e)}")
+            logging.error(f"Sheets sync error: {str(e)}", exc_info=True)
             return False

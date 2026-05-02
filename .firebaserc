@@ -1,5 +1,18 @@
 {
   "projects": {
-    "default": "your-firebase-project-id"
-  }
+    "default": "le-mgmt-bot-scg"
+  },
+  "targets": {
+    "le-mgmt-bot-scg": {
+      "hosting": {
+        "admin": [
+          "le-admin-scg"
+        ],
+        "liff": [
+          "le-liff-scg"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

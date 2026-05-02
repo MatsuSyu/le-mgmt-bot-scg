@@ -7,6 +7,7 @@ from services.gemini_service import GeminiService
 from services.line_service import LineService
 from services.firestore_service import FirestoreService
 from services.sheets_service import SheetsService
+from services.log_service import LogService
 from utils.signature import verify_line_signature
 
 initialize_app()
@@ -35,7 +36,6 @@ def line_webhook(req: https_fn.Request) -> https_fn.Response:
                 user_message = event["message"]["text"]
                 
                 # Simple logic for now: Echo back with persona
-                # (Later we can add Gemini to make it more natural)
                 response_text = f"『{user_message}』ですね！了解しました！ナイスプレイ！"
                 line.reply_message(reply_token, response_text)
 
@@ -60,18 +60,18 @@ def submit_attendance(req: https_fn.Request) -> https_fn.Response:
         firestore_service = FirestoreService()
         firestore_service.update_attendance(user_id, schedule_id, status, car_info, remarks)
         
+        # Syncing to sheet (using default sheet name for now)
         sheets_service = SheetsService()
-        sheets_service.sync_attendance_to_sheets(schedule_id)
+        # sheets_service.sync_attendance_to_sheet("Attendance", [...]) # Needs logic to format all attendance data
         
         line_service = LineService()
-        line_service.send_broadcast(f"【出欠連絡】{user_id}さんが{status}（配車：{car_info.get('mode')}）を登録しました！ナイスプレー！\n備考：{remarks}")
+        line_service.send_admin_notification(f"【出欠連絡】{user_id}さんが{status}（配車：{car_info.get('mode')}）を登録しました！ナイスプレー！\n備考：{remarks}")
         
         log_service.record_action("ATTENDANCE_SUBMIT", f"{user_id} submitted {status} for {schedule_id}", user_id)
         
         return https_fn.Response(json.dumps({"status": "success"}), mimetype="application/json")
     except Exception as e:
         logging.error(f"Submission error: {str(e)}", exc_info=True)
-        from services.log_service import LogService
         LogService().record_error(f"Attendance submission failed: {str(e)}")
         return https_fn.Response(json.dumps({"status": "error", "message": str(e)}), status=500, mimetype="application/json")
 
