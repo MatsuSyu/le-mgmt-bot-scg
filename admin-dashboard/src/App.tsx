@@ -3,6 +3,7 @@ import { collection, query, onSnapshot } from 'firebase/firestore'
 import { db } from './firebase'
 import AttendanceSummary from './components/AttendanceSummary'
 import AttendanceTable from './components/AttendanceTable'
+import LogViewer from './components/LogViewer'
 import './index.css'
 
 function App() {
@@ -52,6 +53,8 @@ function App() {
         />
         
         <AttendanceTable records={records} />
+
+        <LogViewer />
       </main>
 
       <footer style={{ marginTop: '3rem', textAlign: 'center', color: '#a0a0a5', fontSize: '0.8rem' }}>

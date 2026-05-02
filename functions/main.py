@@ -56,6 +56,7 @@ def submit_attendance(req: https_fn.Request) -> https_fn.Response:
         car_info = data.get("car_info")
         remarks = data.get("remarks", "")
         
+        log_service = LogService()
         firestore_service = FirestoreService()
         firestore_service.update_attendance(user_id, schedule_id, status, car_info, remarks)
         
@@ -65,9 +66,13 @@ def submit_attendance(req: https_fn.Request) -> https_fn.Response:
         line_service = LineService()
         line_service.send_broadcast(f"【出欠連絡】{user_id}さんが{status}（配車：{car_info.get('mode')}）を登録しました！ナイスプレー！\n備考：{remarks}")
         
+        log_service.record_action("ATTENDANCE_SUBMIT", f"{user_id} submitted {status} for {schedule_id}", user_id)
+        
         return https_fn.Response(json.dumps({"status": "success"}), mimetype="application/json")
     except Exception as e:
         logging.error(f"Submission error: {str(e)}", exc_info=True)
+        from services.log_service import LogService
+        LogService().record_error(f"Attendance submission failed: {str(e)}")
         return https_fn.Response(json.dumps({"status": "error", "message": str(e)}), status=500, mimetype="application/json")
 
 @https_fn.on_request()
