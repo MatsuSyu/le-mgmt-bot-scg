@@ -1,5 +1,6 @@
 import pytest
 import os
+import json
 from unittest.mock import MagicMock, patch
 
 # Set environment variables for tests
@@ -40,14 +41,17 @@ def test_submit_attendance_success(mocker):
     mocker.patch("main.FirestoreService")
     mocker.patch("main.SheetsService")
     mocker.patch("main.LineService")
+    mocker.patch("main.LogService")
     
     req = MagicMock()
     req.get_json.return_value = {
         "user_id": "user1",
         "schedule_id": "sch1",
-        "status": "出席"
+        "status": "出席",
+        "car_info": {"mode": "同乗希望"}
     }
     
     resp = submit_attendance(req)
     assert resp.status_code == 200
-    assert "true" in resp.response[0].decode("utf-8").lower()
+    # response is json {"status": "success"}
+    assert "success" in resp.get_data(as_text=True)

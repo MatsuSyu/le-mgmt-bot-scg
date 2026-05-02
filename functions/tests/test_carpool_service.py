@@ -1,7 +1,6 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-# No need to mock firebase_admin if we mock the whole services used by CarpoolService
 from services.carpool_service import CarpoolService
 
 def test_calculate_carpool_shortage(mocker):
@@ -14,15 +13,19 @@ def test_calculate_carpool_shortage(mocker):
 
     # Mock data
     mock_firestore.get_schedule_attendance.return_value = [
-        {"status": "出席", "car_info": {"mode": "同乗希望"}},
-        {"status": "出席", "car_info": {"mode": "同乗希望"}},
-        {"status": "出席", "car_info": {"mode": "車出し可能", "seats": 1}},
+        {"user_id": "u1", "status": "出席", "car_info": {"mode": "同乗希望"}},
+        {"user_id": "u2", "status": "出席", "car_info": {"mode": "同乗希望"}},
+        {"user_id": "u3", "status": "出席", "car_info": {"mode": "車出し可能"}},
     ]
+    # u3 provides 1 seat (max_seats 2 - 1 for driver)
+    mock_firestore.get_car_info.side_effect = lambda uid: {"max_seats": 2} if uid == "u3" else None
+    
     mock_gemini.generate_carpool_appeal.return_value = "Appeal!"
 
     service = CarpoolService()
     result = service.calculate_carpool_status("sch_1")
     
+    # 2 want ride, 1 seat available -> shortage 1
     assert result["is_short"] is True
     assert result["shortage"] == 1
     assert result["appeal_message"] == "Appeal!"
@@ -33,9 +36,11 @@ def test_calculate_carpool_no_shortage(mocker):
     
     mock_firestore = mock_firestore_cls.return_value
     mock_firestore.get_schedule_attendance.return_value = [
-        {"status": "出席", "car_info": {"mode": "同乗希望"}},
-        {"status": "出席", "car_info": {"mode": "車出し可能", "seats": 5}}
+        {"user_id": "u1", "status": "出席", "car_info": {"mode": "同乗希望"}},
+        {"user_id": "u2", "status": "出席", "car_info": {"mode": "車出し可能"}}
     ]
+    # u2 provides 4 seats (max_seats 5 - 1 for driver)
+    mock_firestore.get_car_info.return_value = {"max_seats": 5}
 
     service = CarpoolService()
     result = service.calculate_carpool_status("sch_2")
