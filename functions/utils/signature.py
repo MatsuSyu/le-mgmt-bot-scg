@@ -1,13 +1,13 @@
-import hashlib
 import hmac
 import base64
-import os
+import hashlib
+from config import config
 
 def verify_line_signature(body: str, signature: str) -> bool:
     """
     Verifies the LINE Messaging API signature.
     """
-    channel_secret = os.environ.get("LINE_CHANNEL_SECRET")
+    channel_secret = config.line_channel_secret
     if not channel_secret:
         print("LINE_CHANNEL_SECRET is not set.")
         return False

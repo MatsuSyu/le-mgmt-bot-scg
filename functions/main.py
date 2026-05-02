@@ -9,10 +9,11 @@ from services.firestore_service import FirestoreService
 from services.sheets_service import SheetsService
 from services.log_service import LogService
 from utils.signature import verify_line_signature
+from config import config, LINE_CHANNEL_SECRET_KEY, LINE_CHANNEL_ACCESS_TOKEN_KEY, GEMINI_API_KEY_KEY
 
 initialize_app()
 
-@https_fn.on_request()
+@https_fn.on_request(secrets=[LINE_CHANNEL_SECRET_KEY, LINE_CHANNEL_ACCESS_TOKEN_KEY])
 def line_webhook(req: https_fn.Request) -> https_fn.Response:
     """
     Handles LINE Messaging API Webhook.
@@ -44,7 +45,7 @@ def line_webhook(req: https_fn.Request) -> https_fn.Response:
         logging.error(f"LINE Webhook error: {str(e)}", exc_info=True)
         return https_fn.Response("Internal Error", status=500)
 
-@https_fn.on_request()
+@https_fn.on_request(secrets=[LINE_CHANNEL_ACCESS_TOKEN_KEY])
 def submit_attendance(req: https_fn.Request) -> https_fn.Response:
     try:
         data = req.get_json()
@@ -75,7 +76,7 @@ def submit_attendance(req: https_fn.Request) -> https_fn.Response:
         LogService().record_error(f"Attendance submission failed: {str(e)}")
         return https_fn.Response(json.dumps({"status": "error", "message": str(e)}), status=500, mimetype="application/json")
 
-@https_fn.on_request()
+@https_fn.on_request(secrets=[GEMINI_API_KEY_KEY, LINE_CHANNEL_ACCESS_TOKEN_KEY])
 def handle_gmail_webhook(req: https_fn.Request) -> https_fn.Response:
     """
     Handles Gmail Pub/Sub webhook.

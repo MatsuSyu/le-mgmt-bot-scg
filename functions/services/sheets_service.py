@@ -1,12 +1,12 @@
-import os
 import logging
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from typing import List, Any, Optional
+from config import config
 
 class SheetsService:
     def __init__(self, spreadsheet_id: Optional[str] = None):
-        self.spreadsheet_id = spreadsheet_id or os.environ.get("GOOGLE_SHEET_ID")
+        self.spreadsheet_id = spreadsheet_id or config.google_sheet_id
         self.scopes = ['https://www.googleapis.com/auth/spreadsheets']
         self.service = None
 

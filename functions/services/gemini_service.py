@@ -1,12 +1,12 @@
-import os
 import json
 import logging
 import google.generativeai as genai
 from typing import Dict, Any, Optional
+from config import config
 
 class GeminiService:
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+        self.api_key = api_key or config.gemini_api_key
         if self.api_key:
             genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash-latest')

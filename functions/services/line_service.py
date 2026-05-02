@@ -1,12 +1,12 @@
-import os
 import logging
 import requests
 from typing import Optional
+from config import config
 
 class LineService:
     def __init__(self):
-        self.token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
-        self.admin_group_id = os.environ.get("LINE_ADMIN_GROUP_ID")
+        self.token = config.line_channel_access_token
+        self.admin_group_id = config.line_admin_group_id
         self.api_url_push = "https://api.line.me/v2/bot/message/push"
         self.api_url_reply = "https://api.line.me/v2/bot/message/reply"
 
