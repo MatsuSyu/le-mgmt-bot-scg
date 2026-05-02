@@ -11,7 +11,7 @@ function App() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    liff.init({ liffId: "YOUR_LIFF_ID" })
+    liff.init({ liffId: import.meta.env.VITE_LIFF_ID })
       .then(() => {
         if (liff.isLoggedIn()) {
           const profile = liff.getContext();
@@ -34,7 +34,7 @@ function App() {
 
     setSubmitting(true);
     try {
-      const response = await fetch("https://your-firebase-region-project.cloudfunctions.net/submit_attendance", {
+      const response = await fetch(import.meta.env.VITE_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
