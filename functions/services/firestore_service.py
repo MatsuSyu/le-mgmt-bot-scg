@@ -65,7 +65,10 @@ class FirestoreService:
     def get_schedule(self, schedule_id: str) -> Optional[Dict[str, Any]]:
         try:
             doc = self.db.collection("schedules").document(schedule_id).get()
-            return doc.to_dict() if doc.exists else None
+            if doc.exists:
+                data = self._format_doc(doc.to_dict())
+                return {"id": doc.id, **data}
+            return None
         except Exception as e:
             logging.error(f"Error fetching schedule {schedule_id}: {str(e)}", exc_info=True)
             return None
@@ -157,10 +160,10 @@ class FirestoreService:
                 "after_data": new_data,
                 "change_summary": change_summary
             })
-            return old_data
+            return old_data, schedule_id
         except Exception as e:
             logging.error(f"Error updating schedule with history: {str(e)}", exc_info=True)
-            return None
+            return None, None
 
     def get_unique_locations(self) -> List[str]:
         try:
@@ -176,6 +179,10 @@ class FirestoreService:
         except Exception as e:
             logging.error(f"Error getting unique locations: {str(e)}", exc_info=True)
             return []
+    def get_all_members(self) -> List[Dict[str, Any]]:
+        try:
+            docs = self.db.collection("members").stream()
+            return [{"id": doc.id, **self._format_doc(doc.to_dict())} for doc in docs]
         except Exception as e:
-            logging.error(f"Error fetching car info for {user_id}: {str(e)}", exc_info=True)
-            return None
+            logging.error(f"Error fetching all members: {str(e)}", exc_info=True)
+            return []

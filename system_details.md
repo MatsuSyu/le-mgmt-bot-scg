@@ -30,23 +30,30 @@
 ### フロントエンド
 - **admin-dashboard/** (管理者用):
   - PC・タブレット向けの全体監視画面。
-  - 出欠状況のリアルタイム表示、統計カード、操作ログビューア。
+  - **Home**: 出欠状況のリアルタイム表示（日本語化済み）、統計カード、操作ログビューア。
+  - **Members**: 選手・指導者・保護者の名簿管理。役割「指導者 兼 保護者」に対応し、学校名/略称、緊急連絡先、アレルギー情報を保持。
+  - **Schedule**: 予定の登録・編集。AIによる変更要約コメントの自動付与および管理者による詳細備考（自由入力）に対応。
+  - **Cars**: 車両マスター管理。車種、色、定員（運転手含）、基本提供設定を管理。
+
 - **liff-app/** (保護者用):
   - スマホ向け軽量回答画面。
-  - LINE内ブラウザでの動作に最適化された大きなUIパーツ。
+  - **Step 1 (連携/選択)**: 名簿とのLINE連携および回答対象メンバーの選択（兄弟・親子対応）。
+  - **Step 2 (入力)**: コンディション（出席/欠席/遅刻/早退）および配車（車出し/同乗/不要）の選択。
+  - **Step 3 (完了)**: 回答送信後の完了画面を表示（自動クローズを廃止し、UXを向上）。
 
 ## 3. セキュリティ・保守規程
 - **署名検証**: `utils/signature.py` により、LINEからの正規のリクエストであることを保証。
-- **環境変数**: APIキーなどの機密情報は `os.environ` で管理。
+- **整合性管理**: `Integrity Agent` によるデータ型および通信プロトコルの監視。
+- **ドキュメント維持**: `Librarian Agent` による「実装・検証即ドキュメント更新」の徹底（Document-First原則）。
 - **三原則の遵守**:
   - **Security**: 個人情報の最小化とアクセス制御。
   - **Maintainability**: クラスベースの設計と `pytest` による自動テスト。
   - **Performance**: 非同期処理と軽量なフロントエンド資産。
 
 ## 4. データ構造 (Firestore)
-- **members**: `{line_user_id}`: `{ name, role, categories, linked_players, elementary_school }`
-- **schedules**: `{schedule_id}`: `{ date, type, location, target_categories, description }`
-- **attendance**: `{schedule_id}_{user_id}`: `{ status, car_info, remarks, updated_at }`
-- **cars**: `{user_id}`: `{ owner_name, max_seats, is_available }`
+- **members**: `{line_user_id}`: `{ name, role, number, nickname, grade, school_name, short_name, emergency_contact, allergies, notes }`
+- **schedules**: `{schedule_id}`: `{ date, type, location, location_from, location_to, tournament_name, opponent, target_categories, description, ai_change_comment }`
+- **attendance**: `{schedule_id}_{user_id}`: `{ status, car_info: { mode }, remarks, updated_at }`
+- **cars**: `{id}`: `{ owner_name, max_seats, car_model, car_color, notes, is_available }`
 - **logs**: `{ id }`: `{ timestamp, action_type, message, user_id }`
 - **messages**: `{ id }`: `{ timestamp, user_id, text, ai_reply }`

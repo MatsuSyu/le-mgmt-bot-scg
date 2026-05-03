@@ -63,12 +63,51 @@ function App() {
     }
   }
 
+  const [syncing, setSyncing] = useState(false)
+
+  const handleSyncSheets = async () => {
+    setSyncing(true)
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/sync_all_sheets`)
+      if (response.ok) {
+        alert("スプレッドシートの同期が完了しました！")
+      } else {
+        alert("同期に失敗しました")
+      }
+    } catch (err) {
+      alert("通信エラーが発生しました")
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <div className="dashboard-container">
       <header className="header">
         <div className="logo">LITTLE EAGLES / 管理画面</div>
-        <div className="card" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', margin: 0 }}>
-          {loading ? '接続中...' : 'Live 🟢'}
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button 
+            className="btn-sync" 
+            onClick={handleSyncSheets} 
+            disabled={syncing}
+            style={{ 
+              background: '#4CAF50', 
+              color: 'white', 
+              border: 'none', 
+              padding: '0.4rem 0.8rem', 
+              borderRadius: '8px', 
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem'
+            }}
+          >
+            {syncing ? '⌛ 同期中...' : '📊 Sheets同期'}
+          </button>
+          <div className="card" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', margin: 0 }}>
+            {loading ? '接続中...' : 'Live 🟢'}
+          </div>
         </div>
       </header>
 

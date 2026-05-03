@@ -1,50 +1,31 @@
-# システム概要：Little Eagles チーム運営支援 Bot
+# LITTLE EAGLES / 管理・出欠ボット システム概要
 
-少年野球チーム「Little Eagles」の事務局・保護者の負担を軽減し、チームの活気を最大化するためのインテリジェンス・システムです。
+## 1. コンセプト
+本システムは、少年野球チーム「Little Eagles」の運営を効率化し、指導者と保護者のコミュニケーションを円滑にするためのプラットフォームです。AIを活用した自動応答、出欠管理、配車計画の可視化を統合しています。
 
-## 1. システムの目的
-- **自動化**: 体験希望メールの検知や、出欠・配車の集計を自動化し、管理者の手作業をゼロに近づけます。
-- **可視化**: リアルタイムなダッシュボードにより、チームの現状（出欠状況・配車不足）を瞬時に把握できます。
-- **エンゲージメント**: AI（Gemini）がチームの人格（スコア・アシスタント）として振る舞い、温かみのあるコミュニケーションを促進します。
-
-## 2. システム構成図
-```mermaid
-graph TD
-    subgraph "External"
-        Gmail[Gmail (体験希望)]
-        LINE[LINE App (保護者/管理者)]
-    end
-
-    subgraph "Firebase (Backend)"
-        Functions[Firebase Functions (Python)]
-        Firestore[(Firestore DB)]
-        Hosting[Firebase Hosting]
-    end
-
-    subgraph "Frontend"
-        LIFF[LIFF App (出欠回答)]
-        Admin[Admin Dashboard (管理画面)]
-    end
-
-    subgraph "External Services"
-        Sheets[Google Sheets (閲覧用)]
-        Gemini[Gemini AI (解析/生成)]
-    end
-
-    Gmail -->|Pub/Sub| Functions
-    LINE -->|Messaging API| Functions
-    Functions -->|解析依頼| Gemini
-    Functions -->|保存| Firestore
-    Functions -->|同期| Sheets
-    LIFF -->|提出| Functions
-    Admin -->|同期| Firestore
-    Hosting -->|公開| LIFF
-    Hosting -->|公開| Admin
-```
+## 2. 主要エージェント
+当プロジェクトは、複数の専門AIエージェントが連携して開発・メンテナンスを行っています：
+- **Planning (計画)**: 全体設計とタスク分割
+- **UI/UX (意匠)**: プレミアムなユーザー体験の提供
+- **Integration (整合性)**: フロント・バックエンド間のデータ整合性担保
+- **Documentation (Librarian)**: システムドキュメントの最新化
 
 ## 3. テクノロジー・スタック
-- **言語**: Python 3.13 (Backend), TypeScript (Frontend)
 - **基盤**: Firebase (Functions, Hosting, Firestore)
 - **AI**: Google Gemini 1.5 Flash
-- **UI**: React 19 + Vite (Admin Dashboard, LIFF App)
-- **外部API**: LINE Messaging API / LIFF SDK, Google Sheets API
+- **UI**: React 19 + Vite (Vanilla CSSによるプレミアム・デザイン)
+- **外部API**: 
+    - LINE Messaging API / LIFF SDK
+    - **Google Sheets API**: 出欠ログの可視化。
+        - Spreadsheet ID: `1pbRgZCdziSNGuSqcu50ldRRRVni1yU05zElnmICGYb4`
+
+## 4. 開発・運用フローの整合性
+当プロジェクトでは、AIエージェントによる自動開発パイプラインを採用しており、以下の原則を徹底しています：
+1. **Document-First**: コード変更前に設計ドキュメントを更新。
+2. **Integrity Check**: 新機能追加時に既存機能（管理画面・LIFF・スプレッドシート）への影響を自動検証。
+3. **Automated Documentation**: `walkthrough.md` 等を通じた開発過程の透明化。
+
+## 5. 主要機能
+- **メンバー管理**: 指導者・保護者ロールのサポート、学校名等の詳細管理。
+- **予定管理**: AIによる変更点要約、スプレッドシートへのリアルタイム同期。
+- **出欠・配車**: LIFFアプリによる直感的な入力、集計ダッシュボードの自動生成。
