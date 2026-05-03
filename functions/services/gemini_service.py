@@ -87,3 +87,43 @@ class GeminiService:
         except Exception as e:
             logging.error(f"Gemini generation error: {str(e)}", exc_info=True)
             return f"【SOS】{date_str}の配車が{shortage_count}席不足しています！ご協力お願いします！"
+
+    def analyze_schedule_change(self, old_data: Dict[str, Any], new_data: Dict[str, Any]) -> str:
+        """
+        Analyzes the difference between old and new schedule data and returns a summary.
+        """
+        prompt = f"""
+        野球チームの予定が更新されました。変更前後の内容を比較し、
+        保護者や選手が「何が変わったのか」を一目で理解できるようにトピック（時間、場所、持ち物など）を整理して出力してください。
+        
+        変更前: {json.dumps(old_data, ensure_ascii=False)}
+        変更後: {json.dumps(new_data, ensure_ascii=False)}
+        
+        出力は日本語で、箇条書き形式、3行程度にまとめてください。
+        """
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            logging.error(f"Gemini analysis error: {str(e)}")
+            return "予定が更新されました。詳細は詳細画面を確認してください。"
+
+    def generate_bot_reply(self, user_message: str, context: Optional[str] = None) -> str:
+        """
+        Generates a friendly bot reply based on user message and optional context.
+        """
+        prompt = f"""
+        あなたは少年野球チーム「Little Eagles」の熱血応援管理ボット「スコア・アシスタント」です。
+        語尾に「！」「ナイスプレイ！」などをつけ、ポジティブで明るい口調で答えてください。
+        
+        ユーザーのメッセージ: {user_message}
+        状況コンテキスト: {context if context else '通常の会話'}
+        
+        100文字以内で、親しみやすい返信を生成してください。野球用語を適度に交えてください。
+        """
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            logging.error(f"Gemini reply error: {str(e)}")
+            return f"『{user_message}』ですね！了解しました！ナイスプレイ！"
