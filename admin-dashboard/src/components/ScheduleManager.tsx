@@ -22,6 +22,7 @@ const ScheduleManager: React.FC = () => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [locations, setLocations] = useState<string[]>([]);
   const [newSchedule, setNewSchedule] = useState({ 
     date: '', 
@@ -33,7 +34,8 @@ const ScheduleManager: React.FC = () => {
     opponent: '',
     meeting_time_car: '',
     referee_needed: false,
-    target: 'regular' 
+    target: 'regular',
+    description: ''
   });
 
   useEffect(() => {
@@ -55,6 +57,41 @@ const ScheduleManager: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  const handleEditClick = (s: Schedule) => {
+    setEditingSchedule(s);
+    // Convert Firestore timestamp to YYYY-MM-DD for input[type="date"]
+    let dateStr = '';
+    if (s.date) {
+      const d = s.date.toDate ? s.date.toDate() : new Date(s.date);
+      dateStr = d.toISOString().split('T')[0];
+    }
+
+    setNewSchedule({
+      date: dateStr,
+      type: s.type || '練習',
+      location: s.location || '',
+      location_from: s.location_from || '',
+      location_to: s.location_to || '',
+      tournament_name: s.tournament_name || '',
+      opponent: s.opponent || '',
+      meeting_time_car: s.meeting_time_car || '',
+      referee_needed: s.referee_needed || false,
+      target: s.target_categories?.[0] || 'regular',
+      description: s.description || ''
+    });
+    setShowAddForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSchedule(null);
+    setNewSchedule({ 
+      date: '', type: '練習', location: '', location_from: '', location_to: '',
+      tournament_name: '', opponent: '', meeting_time_car: '', referee_needed: false, target: 'regular', description: ''
+    });
+    setShowAddForm(false);
+  };
+
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSchedule.date || !newSchedule.location) {
@@ -63,10 +100,9 @@ const ScheduleManager: React.FC = () => {
     }
     try {
       const apiUrl = import.meta.env.VITE_UPDATE_SCHEDULE_API;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const payload = {
+        id: editingSchedule?.id || null,
+        data: {
           date: newSchedule.date,
           type: newSchedule.type,
           location: newSchedule.location,
@@ -76,21 +112,24 @@ const ScheduleManager: React.FC = () => {
           opponent: newSchedule.opponent,
           meeting_time_car: newSchedule.meeting_time_car,
           referee_needed: newSchedule.referee_needed,
-          target_categories: [newSchedule.target]
-        })
+          target_categories: [newSchedule.target],
+          description: newSchedule.description
+        }
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
-        setNewSchedule({ 
-          date: '', type: '練習', location: '', location_from: '', location_to: '',
-          tournament_name: '', opponent: '', meeting_time_car: '', referee_needed: false, target: 'regular' 
-        });
-        setShowAddForm(false);
+        handleCancelEdit();
       } else {
-        alert("登録に失敗しました。");
+        alert("登録・更新に失敗しました。");
       }
     } catch (error) {
-      console.error("Error adding schedule:", error);
+      console.error("Error adding/updating schedule:", error);
       alert("通信エラーが発生しました。");
     }
   };
@@ -121,7 +160,7 @@ const ScheduleManager: React.FC = () => {
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h3>📅 予定管理</h3>
-        <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
+        <button className="btn-primary" onClick={() => showAddForm ? handleCancelEdit() : setShowAddForm(true)}>
           {showAddForm ? '閉じる' : '+ 予定追加'}
         </button>
       </div>
@@ -129,6 +168,13 @@ const ScheduleManager: React.FC = () => {
       {showAddForm && (
         <form onSubmit={handleAddSchedule} style={{ marginBottom: '2rem', padding: '1.5rem', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #eee' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.2rem' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <h4 style={{ margin: 0, fontSize: '1rem', color: editingSchedule ? '#e63946' : '#2a9d8f' }}>
+                {editingSchedule ? '📝 予定の編集' : '✨ 新規予定の登録'}
+              </h4>
+              <p style={{ margin: '0.4rem 0 1rem 0', fontSize: '0.8rem', color: '#e63946' }}>* は必須項目です</p>
+            </div>
+
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>日付*</label>
               <input 
@@ -140,11 +186,12 @@ const ScheduleManager: React.FC = () => {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>種別</label>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>種別*</label>
               <select 
                 value={newSchedule.type} 
                 onChange={(e) => setNewSchedule({...newSchedule, type: e.target.value})}
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
+                required
               >
                 <option value="練習">練習</option>
                 <option value="試合">試合</option>
@@ -182,50 +229,46 @@ const ScheduleManager: React.FC = () => {
               </select>
             </div>
 
-            {newSchedule.type === '試合' && (
-              <>
-                <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #ccc', paddingTop: '1rem', marginTop: '0.5rem' }}>
-                  <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>🏆 試合詳細情報</h4>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>大会名</label>
-                  <input 
-                    type="text" 
-                    value={newSchedule.tournament_name} 
-                    onChange={(e) => setNewSchedule({...newSchedule, tournament_name: e.target.value})}
-                    placeholder="例：春季大会"
-                    style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>対戦相手</label>
-                  <input 
-                    type="text" 
-                    value={newSchedule.opponent} 
-                    onChange={(e) => setNewSchedule({...newSchedule, opponent: e.target.value})}
-                    placeholder="例：ライオンズ"
-                    style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', cursor: 'pointer' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={newSchedule.referee_needed} 
-                      onChange={(e) => setNewSchedule({...newSchedule, referee_needed: e.target.checked})}
-                      style={{ marginRight: '0.5rem', width: '18px', height: '18px' }}
-                    />
-                    審判の派遣が必要
-                  </label>
-                </div>
-              </>
-            )}
-
             <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #ccc', paddingTop: '1rem', marginTop: '0.5rem' }}>
-              <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>🚗 移動・配車情報</h4>
+              <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>🏆 試合詳細情報（試合の場合のみ・任意）</h4>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>出発地（移動時）</label>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>大会名</label>
+              <input 
+                type="text" 
+                value={newSchedule.tournament_name} 
+                onChange={(e) => setNewSchedule({...newSchedule, tournament_name: e.target.value})}
+                placeholder="例：春季大会"
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>対戦相手</label>
+              <input 
+                type="text" 
+                value={newSchedule.opponent} 
+                onChange={(e) => setNewSchedule({...newSchedule, opponent: e.target.value})}
+                placeholder="例：ライオンズ"
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+              <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={newSchedule.referee_needed} 
+                  onChange={(e) => setNewSchedule({...newSchedule, referee_needed: e.target.checked})}
+                  style={{ marginRight: '0.5rem', width: '18px', height: '18px' }}
+                />
+                審判の派遣が必要
+              </label>
+            </div>
+
+            <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #ccc', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>🚗 移動・配車情報（遠征時のみ・任意）</h4>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>出発地</label>
               <input 
                 type="text" 
                 list="location-suggestions"
@@ -236,7 +279,7 @@ const ScheduleManager: React.FC = () => {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>到着地（移動時）</label>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>到着地</label>
               <input 
                 type="text" 
                 list="location-suggestions"
@@ -247,7 +290,7 @@ const ScheduleManager: React.FC = () => {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>配車協力 集合時間</label>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>配車集合時間</label>
               <input 
                 type="time" 
                 value={newSchedule.meeting_time_car} 
@@ -256,13 +299,26 @@ const ScheduleManager: React.FC = () => {
               />
             </div>
 
-            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #ccc', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>備考・詳細（任意）</label>
+              <textarea 
+                value={newSchedule.description} 
+                onChange={(e) => setNewSchedule({...newSchedule, description: e.target.value})}
+                placeholder="持ち物、雨天時の対応、弁当の有無など"
+                style={{ width: '100%', padding: '0.8rem', borderRadius: '4px', border: '1px solid #ddd', minHeight: '80px' }}
+              />
+            </div>
+
+            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+              {editingSchedule && (
+                <button type="button" className="btn-secondary" onClick={handleCancelEdit} style={{ padding: '0.8rem 2rem' }}>キャンセル</button>
+              )}
               <button 
                 type="submit" 
                 className="btn-primary" 
                 style={{ padding: '0.8rem 2rem', fontSize: '1rem', opacity: (!newSchedule.date || !newSchedule.location) ? 0.6 : 1 }}
               >
-                予定を登録する
+                {editingSchedule ? '変更を保存する' : '予定を登録する'}
               </button>
             </div>
           </div>
@@ -280,7 +336,7 @@ const ScheduleManager: React.FC = () => {
                 <th>種別</th>
                 <th>場所 / 詳細</th>
                 <th>対象</th>
-                <th>AIコメント</th>
+                <th>AIコメント / 備考</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -289,7 +345,7 @@ const ScheduleManager: React.FC = () => {
                 <tr><td colSpan={6} style={{ textAlign: 'center', color: '#999' }}>登録された予定はありません</td></tr>
               ) : (
                 schedules.map((s) => (
-                  <tr key={s.id}>
+                  <tr key={s.id} style={{ background: editingSchedule?.id === s.id ? '#fff3cd' : 'transparent' }}>
                     <td style={{ whiteSpace: 'nowrap' }}>{formatScheduleDate(s.date)}</td>
                     <td>
                       <span className={`badge ${s.type === '試合' ? 'badge-danger' : s.type === '練習' ? 'badge-primary' : 'badge-success'}`}>
@@ -298,18 +354,31 @@ const ScheduleManager: React.FC = () => {
                     </td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{s.location}</div>
-                      {s.tournament_name && <div style={{ fontSize: '0.75rem', color: '#666' }}>{s.tournament_name} vs {s.opponent}</div>}
+                      {s.tournament_name && <div style={{ fontSize: '0.75rem', color: '#666' }}>{s.tournament_name} {s.opponent ? `vs ${s.opponent}` : ''}</div>}
                       {s.location_from && <div style={{ fontSize: '0.7rem', color: '#888' }}>{s.location_from} → {s.location_to}</div>}
                     </td>
                     <td>{s.target_categories?.join(', ') || '全カテゴリ'}</td>
-                    <td style={{ fontSize: '0.75rem', maxWidth: '200px', color: '#555' }}>
-                      {s.ai_change_comment ? (
-                        <div style={{ background: '#fffbe6', padding: '0.4rem', borderRadius: '4px', border: '1px solid #ffe58f' }}>
-                          {s.ai_change_comment}
+                    <td style={{ fontSize: '0.75rem', maxWidth: '250px', color: '#555' }}>
+                      {s.ai_change_comment && (
+                        <div style={{ background: '#fffbe6', padding: '0.4rem', borderRadius: '4px', border: '1px solid #ffe58f', marginBottom: '0.4rem' }}>
+                          ✨ {s.ai_change_comment}
                         </div>
-                      ) : '-'}
+                      )}
+                      {s.description && (
+                        <div style={{ color: '#666', fontStyle: 'italic', padding: '0.2rem' }}>
+                          📝 {s.description}
+                        </div>
+                      )}
+                      {!s.ai_change_comment && !s.description && '-'}
                     </td>
-                    <td><button style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>編集</button></td>
+                    <td>
+                      <button 
+                        onClick={() => handleEditClick(s)}
+                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                      >
+                        編集
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}

@@ -33,7 +33,7 @@ const LogViewer: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  if (loading) return <div>Loading logs...</div>;
+  if (loading) return <div>ログを読み込み中...</div>;
 
   return (
     <div className="card" style={{ marginTop: '2rem' }}>
@@ -52,11 +52,11 @@ const LogViewer: React.FC = () => {
             {logs.map((log) => (
               <tr key={log.id} style={{ borderBottom: '1px solid #3d405b' }}>
                 <td style={{ padding: '0.5rem', color: '#8d99ae' }}>
-                  {log.timestamp?.toDate().toLocaleString()}
+                  {log.timestamp?.toDate().toLocaleString('ja-JP')}
                 </td>
                 <td style={{ padding: '0.5rem' }}>
                   <span className={`badge ${log.action_type === 'ERROR' ? 'badge-danger' : 'badge-primary'}`}>
-                    {log.action_type}
+                    {log.action_type === 'ERROR' ? 'エラー' : log.action_type === 'INFO' ? '情報' : log.action_type}
                   </span>
                 </td>
                 <td style={{ padding: '0.5rem' }}>{log.message}</td>

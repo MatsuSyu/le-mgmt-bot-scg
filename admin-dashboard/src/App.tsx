@@ -66,9 +66,9 @@ function App() {
   return (
     <div className="dashboard-container">
       <header className="header">
-        <div className="logo">LITTLE EAGLES / ADMIN</div>
+        <div className="logo">LITTLE EAGLES / 管理画面</div>
         <div className="card" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', margin: 0 }}>
-          {loading ? 'Connecting...' : 'Live 🟢'}
+          {loading ? '接続中...' : 'Live 🟢'}
         </div>
       </header>
 
@@ -84,7 +84,7 @@ function App() {
       </main>
 
       <footer style={{ marginTop: '3rem', textAlign: 'center', color: '#a0a0a5', fontSize: '0.8rem' }}>
-        &copy; 2026 Little Eagles Baseball Team - Score Assistant AI
+        &copy; 2026 Little Eagles Baseball Team - スコア・アシスタント AI
       </footer>
     </div>
   )

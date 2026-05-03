@@ -12,7 +12,7 @@ interface Member {
 }
 
 function App() {
-  const [step, setStep] = useState<'loading' | 'linkage' | 'selection' | 'form'>('loading')
+  const [step, setStep] = useState<'loading' | 'linkage' | 'selection' | 'form' | 'submitted'>('loading')
   const [userId, setUserId] = useState<string>('')
   const [linkedMembers, setLinkedMembers] = useState<Member[]>([])
   const [unlinkedMembers, setUnlinkedMembers] = useState<Member[]>([])
@@ -40,19 +40,14 @@ function App() {
 
         // 1. Check Linkage
         const linkRes = await fetch(`${MEMBER_API}?line_user_id=${lineId}`)
-        // The API might not exist yet or return 404, handle gracefully
         if (linkRes.ok) {
           const members = await linkRes.json()
-          // If we got members from this lineId, we are linked
-          // (Actually the API needs to be checked carefully)
-          // For now, let's assume if it returns a list, it's the linked members
           const linked = members.filter((m: any) => m.line_user_id === lineId)
           if (linked.length > 0) {
             setLinkedMembers(linked)
             setSelectedForAttendance(linked.map((m: any) => m.id))
             setStep('selection')
           } else {
-            // Not linked, fetch unlinked list
             const unlinkedRes = await fetch(MEMBER_API)
             const unlinked = await unlinkedRes.json()
             setUnlinkedMembers(unlinked)
@@ -97,15 +92,16 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_ids: selectedForAttendance,
-          schedule_id: schedules[0]?.id, // For simplicity pick first
+          schedule_id: schedules[0]?.id,
           status: status,
           car_info: { mode: carMode },
           remarks: remarks
         })
       });
       if (response.ok) {
-        alert("登録完了！ナイスプレイ！");
-        liff.closeWindow();
+        setStep('submitted');
+      } else {
+        alert("登録に失敗しました。");
       }
     } catch (err) {
       alert("通信エラーが発生しました");
@@ -115,6 +111,29 @@ function App() {
   }
 
   if (step === 'loading') return <div className="loading-overlay">Loading...</div>
+
+  if (step === 'submitted') {
+    return (
+      <div className="liff-container" style={{ textAlign: 'center', paddingTop: '4rem' }}>
+        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🎉</div>
+        <h2 style={{ marginBottom: '1rem' }}>登録完了！</h2>
+        <p style={{ color: 'var(--text-dim)', marginBottom: '2rem' }}>
+          出欠の回答を受け付けました。<br />
+          ナイスプレイ！
+        </p>
+        <button 
+          className="btn-submit" 
+          onClick={() => setStep('selection')}
+          style={{ background: '#f1f3f5', color: '#333' }}
+        >
+          回答を修正する
+        </button>
+        <p style={{ marginTop: '2rem', fontSize: '0.8rem', color: '#8d99ae' }}>
+          ※この画面は閉じて構いません
+        </p>
+      </div>
+    )
+  }
 
   if (step === 'linkage') {
     return (
@@ -128,7 +147,12 @@ function App() {
             <div key={m.id} className="member-item" onClick={() => handleLinkMember(m.id)}>
               <div className="member-info">
                 <span className="member-name">{m.name}</span>
-                <span className="member-detail">{m.role === 'player' ? `${m.grade}年 / ${m.nickname}` : m.role}</span>
+                <span className="member-detail">
+                  {m.role === 'player' ? `${m.grade}年 / ${m.nickname}` : 
+                   m.role === 'coach' ? '指導者' : 
+                   m.role === 'parent' ? '保護者' : 
+                   m.role === 'coach_parent' ? '指導者/保護者' : m.role}
+                </span>
               </div>
               <span style={{ color: 'var(--primary)', fontWeight: 700 }}>連携 ＞</span>
             </div>
@@ -161,7 +185,12 @@ function App() {
             >
               <div className="member-info">
                 <span className="member-name">{m.name}</span>
-                <span className="member-detail">{m.role}</span>
+                <span className="member-detail">
+                  {m.role === 'player' ? '選手' : 
+                   m.role === 'coach' ? '指導者' : 
+                   m.role === 'parent' ? '保護者' : 
+                   m.role === 'coach_parent' ? '指導者/保護者' : m.role}
+                </span>
               </div>
               {selectedForAttendance.includes(m.id) ? '✅' : '○'}
             </div>
@@ -181,15 +210,12 @@ function App() {
   const formatLiffDate = (date: any) => {
     if (!date) return '未設定';
     try {
-      // If it's a Firestore Timestamp from JSON (has seconds/nanoseconds)
       if (date && typeof date.seconds === 'number') {
         return new Date(date.seconds * 1000).toLocaleDateString('ja-JP', { weekday: 'short', month: 'numeric', day: 'numeric' });
       }
-      // If it's already a JS Date
       if (date instanceof Date) {
         return date.toLocaleDateString('ja-JP', { weekday: 'short', month: 'numeric', day: 'numeric' });
       }
-      // If it's a string
       if (typeof date === 'string') {
         return new Date(date).toLocaleDateString('ja-JP', { weekday: 'short', month: 'numeric', day: 'numeric' });
       }
