@@ -18,6 +18,7 @@ function App() {
   const [unlinkedMembers, setUnlinkedMembers] = useState<Member[]>([])
   const [selectedForAttendance, setSelectedForAttendance] = useState<string[]>([])
   const [schedules, setSchedules] = useState<any[]>([])
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>('')
   
   const [status, setStatus] = useState<'出席' | '欠席' | '遅刻' | '早退' | ''>('')
   const [carMode, setCarMode] = useState<'車出し可能' | '同乗希望' | '不要' | ''>('')
@@ -25,7 +26,7 @@ function App() {
   const [submitting, setSubmitting] = useState(false)
 
   const SUBMIT_API = import.meta.env.VITE_API_URL;
-  const SCHEDULE_API = import.meta.env.VITE_SCHEDULE_API_URL;
+  const INIT_API = import.meta.env.VITE_INIT_API_URL;
   const MEMBER_API = import.meta.env.VITE_MEMBER_API_URL;
 
   useEffect(() => {
@@ -38,28 +39,28 @@ function App() {
         }
         setUserId(lineId)
 
-        // 1. Check Linkage
-        const linkRes = await fetch(`${MEMBER_API}?line_user_id=${lineId}`)
-        if (linkRes.ok) {
-          const members = await linkRes.json()
-          const linked = members.filter((m: any) => m.line_user_id === lineId)
-          if (linked.length > 0) {
-            setLinkedMembers(linked)
-            setSelectedForAttendance(linked.map((m: any) => m.id))
+        // Use single unified API call
+        const initRes = await fetch(`${INIT_API}?line_user_id=${lineId}`)
+        if (initRes.ok) {
+          const data = await initRes.json()
+          
+          const attendableSchedules = (data.schedules || []).filter((s: any) => s.type !== '学校行事')
+          setSchedules(attendableSchedules)
+          if (attendableSchedules.length > 0) {
+            setSelectedScheduleId(attendableSchedules[0].id)
+            setSelectedScheduleId(data.schedules[0].id)
+          }
+
+          if (data.linked_members && data.linked_members.length > 0) {
+            setLinkedMembers(data.linked_members)
+            setSelectedForAttendance(data.linked_members.map((m: any) => m.id))
             setStep('selection')
           } else {
-            const unlinkedRes = await fetch(MEMBER_API)
-            const unlinked = await unlinkedRes.json()
-            setUnlinkedMembers(unlinked)
+            setUnlinkedMembers(data.unlinked_members || [])
             setStep('linkage')
           }
-        }
-
-        // Fetch schedules
-        const schedRes = await fetch(SCHEDULE_API)
-        if (schedRes.ok) {
-          const data = await schedRes.json()
-          setSchedules(data)
+        } else {
+          throw new Error("Init API Failed")
         }
       } catch (err) {
         console.error("Init failed", err)
@@ -84,7 +85,12 @@ function App() {
   }
 
   const handleSubmit = async () => {
-    if (!status || !carMode || selectedForAttendance.length === 0) return;
+    if (!status || selectedForAttendance.length === 0) return;
+    if (status !== '欠席' && !carMode) return;
+    
+    const currentSchedule = schedules.find(s => s.id === selectedScheduleId);
+    if (!currentSchedule) return;
+
     setSubmitting(true);
     try {
       const response = await fetch(SUBMIT_API, {
@@ -92,9 +98,9 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_ids: selectedForAttendance,
-          schedule_id: schedules[0]?.id,
+          schedule_id: currentSchedule.id,
           status: status,
-          car_info: { mode: carMode },
+          car_info: { mode: status === '欠席' ? '不要' : carMode },
           remarks: remarks
         })
       });
@@ -210,16 +216,9 @@ function App() {
   const formatLiffDate = (date: any) => {
     if (!date) return '未設定';
     try {
-      if (date && typeof date.seconds === 'number') {
-        return new Date(date.seconds * 1000).toLocaleDateString('ja-JP', { weekday: 'short', month: 'numeric', day: 'numeric' });
-      }
-      if (date instanceof Date) {
-        return date.toLocaleDateString('ja-JP', { weekday: 'short', month: 'numeric', day: 'numeric' });
-      }
-      if (typeof date === 'string') {
-        return new Date(date).toLocaleDateString('ja-JP', { weekday: 'short', month: 'numeric', day: 'numeric' });
-      }
-      return String(date);
+      const d = date && typeof date.seconds === 'number' ? new Date(date.seconds * 1000) : new Date(date);
+      const week = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+      return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}(${week})`;
     } catch (e) {
       return '日付エラー';
     }
@@ -239,20 +238,52 @@ function App() {
         </p>
       </header>
 
-      {schedules[0] && (
-        <div className="schedule-card">
-          <div className="schedule-header">
-            <span className="schedule-date">{formatLiffDate(schedules[0].date)}</span>
-            <span className="schedule-badge">{schedules[0].type}</span>
+      <div style={{ background: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.85rem', borderLeft: '4px solid var(--primary)' }}>
+        <p style={{ margin: 0, fontWeight: 600, color: '#333' }}>
+          ※基本は「出席・送迎不要」扱いとなります。<br/>
+          欠席・遅刻・早退や、配車連絡がある場合のみご登録ください。
+        </p>
+      </div>
+
+      <div className="form-group">
+        <label className="label">回答対象の予定</label>
+        {schedules.length === 0 ? (
+          <div style={{ padding: '0.8rem', background: '#f8f9fa', borderRadius: '8px', color: '#666', fontSize: '0.9rem' }}>
+            現在、回答が必要な予定はありません。
           </div>
-          <div style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0.5rem 0' }}>{schedules[0].location}</div>
-          {schedules[0].ai_change_comment && (
-            <div style={{ fontSize: '0.75rem', background: '#fffbe6', padding: '0.5rem', borderRadius: '8px', color: '#856404' }}>
-              ✨ AI要約: {schedules[0].ai_change_comment}
+        ) : (
+          <select 
+            value={selectedScheduleId}
+            onChange={(e) => setSelectedScheduleId(e.target.value)}
+            style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #ddd', fontSize: '1rem', background: '#fff' }}
+          >
+            {schedules.map(s => (
+              <option key={s.id} value={s.id}>
+                {formatLiffDate(s.date)} - {s.location} ({s.type})
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {(() => {
+        const currentSchedule = schedules.find(s => s.id === selectedScheduleId) || schedules[0];
+        if (!currentSchedule) return null;
+        return (
+          <div className="schedule-card" style={{ marginTop: '1rem' }}>
+            <div className="schedule-header">
+              <span className="schedule-date">{formatLiffDate(currentSchedule.date)}</span>
+              <span className="schedule-badge">{currentSchedule.type}</span>
             </div>
-          )}
-        </div>
-      )}
+            <div style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0.5rem 0' }}>{currentSchedule.location}</div>
+            {currentSchedule.ai_change_comment && (
+              <div style={{ fontSize: '0.75rem', background: '#fffbe6', padding: '0.5rem', borderRadius: '8px', color: '#856404' }}>
+                ✨ AI要約: {currentSchedule.ai_change_comment}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="form-group">
         <label className="label">コンディション</label>
@@ -269,21 +300,23 @@ function App() {
         </div>
       </div>
 
-      <div className="form-group">
-        <label className="label">配車</label>
-        <div className="options-grid" style={{ gridTemplateColumns: '1fr' }}>
-          {['車出し可能', '同乗希望', '不要'].map(m => (
-            <div 
-              key={m}
-              className={`option-card ${carMode === m ? 'selected' : ''}`}
-              onClick={() => setCarMode(m as any)}
-              style={{ textAlign: 'left', paddingLeft: '1.5rem' }}
-            >
-              {m === '車出し可能' ? '🚐 車出しできます' : m === '同乗希望' ? '🙋 同乗希望です' : '🚲 送迎不要・自力'}
-            </div>
-          ))}
+      {status !== '欠席' && (
+        <div className="form-group">
+          <label className="label">配車</label>
+          <div className="options-grid" style={{ gridTemplateColumns: '1fr' }}>
+            {['車出し可能', '同乗希望', '不要'].map(m => (
+              <div 
+                key={m}
+                className={`option-card ${carMode === m ? 'selected' : ''}`}
+                onClick={() => setCarMode(m as any)}
+                style={{ textAlign: 'left', paddingLeft: '1.5rem' }}
+              >
+                {m === '車出し可能' ? '🚐 車出しできます' : m === '同乗希望' ? '🙋 同乗希望です' : '🚲 送迎不要・自力'}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="form-group">
         <label className="label">伝言（備考）</label>
@@ -298,7 +331,7 @@ function App() {
 
       <button 
         className="btn-submit" 
-        disabled={!status || !carMode || submitting}
+        disabled={!status || (status !== '欠席' && !carMode) || submitting}
         onClick={handleSubmit}
       >
         {submitting ? '送信中...' : '登録を完了する！'}

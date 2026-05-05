@@ -131,19 +131,22 @@ const MemberManager: React.FC = () => {
                     type="text" 
                     value={newMember.nickname} 
                     onChange={(e) => setNewMember({...newMember, nickname: e.target.value})}
-                    placeholder="例：ハルタ"
+                    placeholder="例：タロウ"
                     style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
                   />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>学年</label>
-                  <input 
-                    type="text" 
+                  <select 
                     value={newMember.grade} 
                     onChange={(e) => setNewMember({...newMember, grade: e.target.value})}
-                    placeholder="例：6（数字のみ）"
                     style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
-                  />
+                  >
+                    <option value="">未選択（任意）</option>
+                    {[1, 2, 3, 4, 5, 6].map(g => (
+                      <option key={g} value={String(g)}>{g}年生</option>
+                    ))}
+                  </select>
                 </div>
               </>
             )}
@@ -152,11 +155,17 @@ const MemberManager: React.FC = () => {
               <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>学校名</label>
               <input 
                 type="text" 
+                list="school-suggestions"
                 value={newMember.school_name} 
                 onChange={(e) => setNewMember({...newMember, school_name: e.target.value})}
                 placeholder="例：馬場小学校"
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
               />
+              <datalist id="school-suggestions">
+                {Array.from(new Set(members.map(m => m.school_name).filter(Boolean))).sort().map(s => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>略称（名簿用）</label>
@@ -169,14 +178,13 @@ const MemberManager: React.FC = () => {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>緊急連絡先*</label>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>緊急連絡先</label>
               <input 
                 type="text" 
                 value={newMember.emergency_contact} 
                 onChange={(e) => setNewMember({...newMember, emergency_contact: e.target.value})}
                 placeholder="例：090-0000-0000（母）"
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
-                required
               />
             </div>
             <div>

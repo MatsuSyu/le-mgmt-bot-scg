@@ -134,8 +134,11 @@ def update_schedule_admin(req: https_fn.Request) -> https_fn.Response:
         if data is None:
             try:
                 data = json.loads(req.get_data(as_text=True))
-            except:
+            except Exception as e:
+                logging.error(f"JSON Parse Error: {str(e)}")
                 return https_fn.Response(json.dumps({"status": "error", "message": "Invalid JSON"}), status=400, mimetype="application/json")
+        
+        logging.info(f"Update Schedule Admin called with data: {json.dumps(data)}")
         
         # Support both {"id": "...", "data": {...}} and flat {...} structures
         schedule_id = data.get("id")
@@ -146,33 +149,38 @@ def update_schedule_admin(req: https_fn.Request) -> https_fn.Response:
             new_data = {k: v for k, v in data.items() if k != "id"}
         
         fs = FirestoreService()
-        old_data, schedule_id = fs.update_schedule_with_history(schedule_id, new_data)
+        old_data, final_id = fs.update_schedule_with_history(schedule_id, new_data)
         
-        # If it was an update or creation success
-        if schedule_id:
-            gemini = GeminiService()
-            change_comment = gemini.analyze_schedule_change(old_data, new_data)
-            fs.db.collection("schedules").document(schedule_id).update({"ai_change_comment": change_comment})
+        if not final_id:
+            raise Exception("Failed to update/create schedule in Firestore")
+
+        logging.info(f"Firestore update successful. ID: {final_id}")
+
+        # If it was an update or creation success, proceed to AI and Sheets (non-blocking)
+        try:
+            # AI Change Comment (only for existing schedules with old data)
+            if old_data:
+                gemini = GeminiService()
+                change_comment = gemini.analyze_schedule_change(old_data, new_data)
+                fs.db.collection("schedules").document(final_id).update({"ai_change_comment": change_comment})
             
-            # Trigger Sheet Sync for this schedule
-            try:
-                sheets = SheetsService()
+            # Trigger Sheet Sync
+            sheets = SheetsService()
+            if sheets.spreadsheet_id:
                 members = fs.get_all_members()
-                # Refetch full schedule with new ID/comment
-                full_schedule = fs.get_schedule(schedule_id)
+                full_schedule = fs.get_schedule(final_id)
                 if full_schedule:
-                    full_schedule["id"] = schedule_id
-                    attendance = fs.get_schedule_attendance(schedule_id)
+                    attendance = fs.get_schedule_attendance(final_id)
                     sheets.sync_detailed_report(full_schedule, members, attendance)
                     
                 # Update overall dashboard
                 active_schedules = fs.get_active_schedules(limit=10)
                 all_att = {s["id"]: fs.get_schedule_attendance(s["id"]) for s in active_schedules}
                 sheets.sync_attendance_dashboard(active_schedules, members, all_att)
-            except Exception as e:
-                logging.error(f"Sheet sync failed after schedule update: {str(e)}")
+        except Exception as e:
+            logging.error(f"Post-update auxiliary tasks failed: {str(e)}")
 
-        return https_fn.Response(json.dumps({"status": "success"}), mimetype="application/json")
+        return https_fn.Response(json.dumps({"status": "success", "id": final_id}), mimetype="application/json")
     except Exception as e:
         logging.error(f"Error in update_schedule_admin: {str(e)}", exc_info=True)
         return https_fn.Response(json.dumps({"status": "error", "message": str(e)}), status=500, mimetype="application/json")
@@ -187,18 +195,7 @@ def get_active_schedules(req: https_fn.Request) -> https_fn.Response:
         fs = FirestoreService()
         schedules = fs.get_active_schedules()
         
-        enhanced_schedules = []
-        for s in schedules:
-            attendance = fs.get_schedule_attendance(s["id"])
-            # Attendance summary by role
-            summary = {"player": [], "coach": [], "guardian": []}
-            for att in attendance:
-                # We'll fetch nicknames in the next iteration or via a mapping
-                summary["player"].append(att["user_id"])
-            s["attendance_summary"] = summary
-            enhanced_schedules.append(s)
-            
-        return https_fn.Response(json.dumps(enhanced_schedules, ensure_ascii=False), mimetype="application/json")
+        return https_fn.Response(json.dumps(schedules, ensure_ascii=False), mimetype="application/json")
     except Exception as e:
         return https_fn.Response(json.dumps({"error": str(e)}), status=500, mimetype="application/json")
 
@@ -211,7 +208,11 @@ def member_linkage(req: https_fn.Request) -> https_fn.Response:
         if req.method == "OPTIONS": return https_fn.Response("OK")
         fs = FirestoreService()
         if req.method == "GET":
-            members = fs.get_unlinked_members()
+            line_user_id = req.args.get("line_user_id")
+            if line_user_id:
+                members = fs.get_members_by_line_id(line_user_id)
+            else:
+                members = fs.get_unlinked_members()
             return https_fn.Response(json.dumps(members, ensure_ascii=False), mimetype="application/json")
         else:
             # Robust JSON parsing
@@ -231,11 +232,45 @@ def member_linkage(req: https_fn.Request) -> https_fn.Response:
     cors=options.CorsOptions(cors_origins="*", cors_methods=["get"]),
     invoker="public"
 )
-def get_unique_locations(req: https_fn.Request) -> https_fn.Response:
+def get_unique_suggestions(req: https_fn.Request) -> https_fn.Response:
     try:
         if req.method == "OPTIONS": return https_fn.Response("OK")
         fs = FirestoreService()
-        locations = fs.get_unique_locations()
-        return https_fn.Response(json.dumps(locations, ensure_ascii=False), mimetype="application/json")
+        fields = ["location", "tournament_name", "opponent"]
+        suggestions = fs.get_unique_field_values(fields)
+        return https_fn.Response(json.dumps(suggestions, ensure_ascii=False), mimetype="application/json")
     except Exception as e:
         return https_fn.Response(str(e), status=500)
+
+@https_fn.on_request(
+    cors=options.CorsOptions(cors_origins="*", cors_methods=["get"]),
+    invoker="public"
+)
+def init_liff_app(req: https_fn.Request) -> https_fn.Response:
+    try:
+        if req.method == "OPTIONS": return https_fn.Response("OK")
+        line_user_id = req.args.get("line_user_id", "")
+        
+        fs = FirestoreService()
+        
+        # 1. Fetch active schedules (No N+1 query, higher limit to accommodate school events)
+        schedules = fs.get_active_schedules(limit=20)
+        
+        # 2. Fetch members
+        linked_members = []
+        unlinked_members = []
+        
+        if line_user_id:
+            linked_members = fs.get_members_by_line_id(line_user_id)
+            
+        if not linked_members:
+            unlinked_members = fs.get_unlinked_members()
+            
+        return https_fn.Response(json.dumps({
+            "schedules": schedules,
+            "linked_members": linked_members,
+            "unlinked_members": unlinked_members
+        }, ensure_ascii=False), mimetype="application/json")
+    except Exception as e:
+        logging.error(f"init_liff_app error: {str(e)}", exc_info=True)
+        return https_fn.Response(json.dumps({"error": str(e)}), status=500, mimetype="application/json")

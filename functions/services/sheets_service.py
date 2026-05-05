@@ -81,6 +81,7 @@ class SheetsService:
         header = [
             ["イベント名", schedule.get("location", "-")],
             ["日付", raw_date],
+            ["集合時間", schedule.get("meeting_time", "-")],
             ["種別", schedule.get("type", "-")],
             [],
             ["名前", "役職/学年", "出欠状況", "配車状況", "伝言"]

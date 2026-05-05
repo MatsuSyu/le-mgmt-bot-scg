@@ -165,20 +165,27 @@ class FirestoreService:
             logging.error(f"Error updating schedule with history: {str(e)}", exc_info=True)
             return None, None
 
-    def get_unique_locations(self) -> List[str]:
+    def get_unique_field_values(self, fields: List[str]) -> Dict[str, List[str]]:
         try:
-            # Simple approach: fetch all schedules and unique locations
             docs = self.db.collection("schedules").stream()
-            locations = set()
+            results = {field: set() for field in fields}
             for doc in docs:
                 data = doc.to_dict()
-                if data.get("location"): locations.add(data["location"])
-                if data.get("location_from"): locations.add(data["location_from"])
-                if data.get("location_to"): locations.add(data["location_to"])
-            return sorted(list(locations))
+                for field in fields:
+                    val = data.get(field)
+                    if val:
+                        results[field].add(val)
+            
+            return {field: sorted(list(values)) for field, values in results.items()}
         except Exception as e:
-            logging.error(f"Error getting unique locations: {str(e)}", exc_info=True)
-            return []
+            logging.error(f"Error getting unique field values: {str(e)}", exc_info=True)
+            return {field: [] for field in fields}
+
+    def get_unique_locations(self) -> List[str]:
+        # Backward compatibility
+        res = self.get_unique_field_values(["location", "location_from", "location_to"])
+        all_locs = set(res["location"] + res["location_from"] + res["location_to"])
+        return sorted(list(all_locs))
     def get_all_members(self) -> List[Dict[str, Any]]:
         try:
             docs = self.db.collection("members").stream()

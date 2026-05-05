@@ -78,9 +78,9 @@ body {
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);
-  padding: 1.5rem;
+  padding: 1rem 1.2rem;
   box-shadow: var(--shadow);
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   transition: transform 0.2s ease;
 }
 
@@ -127,6 +127,16 @@ td {
   border-bottom: 1px solid #f1f3f5;
 }
 
+.dense-table th {
+  padding: 0.6rem;
+  font-size: 0.75rem;
+}
+
+.dense-table td {
+  padding: 0.6rem;
+  font-size: 0.85rem;
+}
+
 .badge {
   padding: 0.25rem 0.6rem;
   border-radius: 20px;
@@ -160,4 +170,53 @@ button {
 @media (max-width: 768px) {
   .dashboard-container { padding: 1rem; }
   .nav-tabs { overflow-x: auto; white-space: nowrap; }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  animation: modalIn 0.3s ease-out;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mini-table {
+  font-size: 0.9rem;
+}
+
+.mini-table th {
+  padding: 0.6rem;
+}
+
+.mini-table td {
+  padding: 0.6rem;
+}
+
+.btn-secondary {
+  background-color: #f1f3f5;
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background-color: #e9ecef;
 }
