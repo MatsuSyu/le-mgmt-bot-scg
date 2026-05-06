@@ -9,7 +9,7 @@ class GeminiService:
         self.api_key = api_key or config.gemini_api_key
         if self.api_key:
             genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
 
     def extract_trial_info(self, email_body: str) -> Dict[str, Any]:
         """
