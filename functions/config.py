@@ -27,4 +27,8 @@ class Config:
     def google_sheet_id(self) -> str:
         return os.environ.get("GOOGLE_SHEET_ID", "")
 
+    @property
+    def gemini_model(self) -> str:
+        return os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+
 config = Config()
