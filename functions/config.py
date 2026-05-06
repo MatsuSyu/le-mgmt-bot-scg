@@ -29,6 +29,6 @@ class Config:
 
     @property
     def gemini_model(self) -> str:
-        return os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+        return os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
 
 config = Config()
