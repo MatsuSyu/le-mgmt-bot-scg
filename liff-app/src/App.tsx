@@ -9,6 +9,7 @@ interface Member {
   nickname?: string;
   number?: string;
   grade?: string;
+  target_categories?: string[];
 }
 
 function App() {
@@ -29,6 +30,14 @@ function App() {
   const INIT_API = import.meta.env.VITE_INIT_API_URL;
   const MEMBER_API = import.meta.env.VITE_MEMBER_API_URL;
 
+  // Helper to determine category from grade
+  const getCategory = (grade?: string): 'regular' | 'junior' | 'all' => {
+    if (!grade) return 'all';
+    const g = parseInt(grade);
+    if (isNaN(g)) return 'all';
+    return g >= 5 ? 'regular' : 'junior';
+  };
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -39,16 +48,19 @@ function App() {
         }
         setUserId(lineId)
 
-        // Use single unified API call
         const initRes = await fetch(`${INIT_API}?line_user_id=${lineId}`)
         if (initRes.ok) {
           const data = await initRes.json()
           
-          const attendableSchedules = (data.schedules || []).filter((s: any) => s.type !== '学校行事')
-          setSchedules(attendableSchedules)
-          if (attendableSchedules.length > 0) {
-            setSelectedScheduleId(attendableSchedules[0].id)
-            setSelectedScheduleId(data.schedules[0].id)
+          const allSchedules = data.schedules || []
+          setSchedules(allSchedules)
+          
+          // Default selection to the first attendable schedule
+          const firstAttendable = allSchedules.find((s: any) => s.type !== '学校行事')
+          if (firstAttendable) {
+            setSelectedScheduleId(firstAttendable.id)
+          } else if (allSchedules.length > 0) {
+            setSelectedScheduleId(allSchedules[0].id)
           }
 
           if (data.linked_members && data.linked_members.length > 0) {
@@ -130,12 +142,19 @@ function App() {
         <button 
           className="btn-submit" 
           onClick={() => setStep('selection')}
-          style={{ background: '#f1f3f5', color: '#333' }}
+          style={{ background: '#f1f3f5', color: '#333', marginBottom: '1rem' }}
         >
           回答を修正する
         </button>
+        <button 
+          className="btn-submit" 
+          onClick={() => liff.closeWindow()}
+          style={{ background: 'var(--primary)', color: 'white' }}
+        >
+          LINEに戻る
+        </button>
         <p style={{ marginTop: '2rem', fontSize: '0.8rem', color: '#8d99ae' }}>
-          ※この画面は閉じて構いません
+          ※公式アカウントのリッチメニューからいつでも再表示できます
         </p>
       </div>
     )
@@ -192,7 +211,7 @@ function App() {
               <div className="member-info">
                 <span className="member-name">{m.name}</span>
                 <span className="member-detail">
-                  {m.role === 'player' ? '選手' : 
+                  {m.role === 'player' ? `${m.grade}年 / ${getCategory(m.grade) === 'regular' ? 'レギュラー' : 'ジュニア'}` : 
                    m.role === 'coach' ? '指導者' : 
                    m.role === 'parent' ? '保護者' : 
                    m.role === 'coach_parent' ? '指導者/保護者' : m.role}
@@ -234,16 +253,12 @@ function App() {
       <header className="header" style={{ marginBottom: '1rem' }}>
         <h2 style={{ fontSize: '1.1rem' }}>出欠回答</h2>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-          対象: {selectedForAttendance.map(id => linkedMembers.find(m => m.id === id)?.name).join(', ')}
+          対象: {selectedForAttendance.map(id => {
+            const m = linkedMembers.find(m => m.id === id);
+            return m ? `${m.name}(${getCategory(m.grade) === 'regular' ? 'レ' : 'ジ'})` : '';
+          }).join(', ')}
         </p>
       </header>
-
-      <div style={{ background: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.85rem', borderLeft: '4px solid var(--primary)' }}>
-        <p style={{ margin: 0, fontWeight: 600, color: '#333' }}>
-          ※基本は「出席・送迎不要」扱いとなります。<br/>
-          欠席・遅刻・早退や、配車連絡がある場合のみご登録ください。
-        </p>
-      </div>
 
       <div className="form-group">
         <label className="label">回答対象の予定</label>
@@ -257,11 +272,18 @@ function App() {
             onChange={(e) => setSelectedScheduleId(e.target.value)}
             style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #ddd', fontSize: '1rem', background: '#fff' }}
           >
-            {schedules.map(s => (
-              <option key={s.id} value={s.id}>
-                {formatLiffDate(s.date)} - {s.location} ({s.type})
-              </option>
-            ))}
+            {schedules.map(s => {
+              const isTarget = s.target_categories?.includes('all') || 
+                               selectedForAttendance.some(id => {
+                                 const m = linkedMembers.find(m => m.id === id);
+                                 return s.target_categories?.includes(getCategory(m?.grade));
+                               });
+              return (
+                <option key={s.id} value={s.id}>
+                  {isTarget ? '📌 ' : ''}{formatLiffDate(s.date)} - {s.location}
+                </option>
+              );
+            })}
           </select>
         )}
       </div>
@@ -269,73 +291,96 @@ function App() {
       {(() => {
         const currentSchedule = schedules.find(s => s.id === selectedScheduleId) || schedules[0];
         if (!currentSchedule) return null;
+        
+        const isSchoolEvent = currentSchedule.type === '学校行事';
+        const userCategories = selectedForAttendance.map(id => getCategory(linkedMembers.find(m => m.id === id)?.grade));
+        const isMatch = currentSchedule.target_categories?.includes('all') || 
+                        userCategories.some(cat => currentSchedule.target_categories?.includes(cat));
+
         return (
-          <div className="schedule-card" style={{ marginTop: '1rem' }}>
-            <div className="schedule-header">
-              <span className="schedule-date">{formatLiffDate(currentSchedule.date)}</span>
-              <span className="schedule-badge">{currentSchedule.type}</span>
-            </div>
-            <div style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0.5rem 0' }}>{currentSchedule.location}</div>
-            {currentSchedule.ai_change_comment && (
-              <div style={{ fontSize: '0.75rem', background: '#fffbe6', padding: '0.5rem', borderRadius: '8px', color: '#856404' }}>
-                ✨ AI要約: {currentSchedule.ai_change_comment}
+          <>
+            <div className={`schedule-card ${isMatch ? 'highlight' : ''}`} style={{ marginTop: '1rem', borderLeft: isMatch ? '5px solid var(--primary)' : '1px solid #eee' }}>
+              <div className="schedule-header">
+                <span className="schedule-date">{formatLiffDate(currentSchedule.date)}</span>
+                <span className="schedule-badge" style={{ background: isMatch ? 'var(--primary)' : '#8d99ae' }}>
+                  {currentSchedule.target_categories?.join(', ') || '全員'}
+                </span>
               </div>
+              <div style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0.5rem 0' }}>{currentSchedule.location}</div>
+              {isMatch && <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, marginBottom: '0.5rem' }}>★あなたの対象カテゴリーです</div>}
+              {currentSchedule.ai_change_comment && (
+                <div style={{ fontSize: '0.75rem', background: '#fffbe6', padding: '0.5rem', borderRadius: '8px', color: '#856404' }}>
+                  ✨ AI要約: {currentSchedule.ai_change_comment}
+                </div>
+              )}
+            </div>
+
+            {isSchoolEvent ? (
+              <div style={{ background: '#e9ecef', padding: '1.5rem', borderRadius: '12px', textAlign: 'center', marginTop: '1.5rem', border: '1px solid #ced4da' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🏫</div>
+                <h3 style={{ margin: 0, fontSize: '1rem', color: '#495057' }}>学校行事・その他（参照用）</h3>
+                <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '0.5rem' }}>
+                  この予定は参照用のため、<br/>出欠の回答は不要です。
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="form-group" style={{ marginTop: '1.5rem' }}>
+                  <label className="label">コンディション</label>
+                  <div className="options-grid">
+                    {['出席', '欠席', '遅刻', '早退'].map(s => (
+                      <div 
+                        key={s}
+                        className={`option-card ${status === s ? 'selected' : ''}`}
+                        onClick={() => setStatus(s as any)}
+                      >
+                        {s === '出席' ? '⚾' : s === '欠席' ? '🏠' : s === '遅刻' ? '🏃' : '👋'} {s}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {status !== '欠席' && (
+                  <div className="form-group">
+                    <label className="label">配車</label>
+                    <div className="options-grid" style={{ gridTemplateColumns: '1fr' }}>
+                      {['車出し可能', '同乗希望', '不要'].map(m => (
+                        <div 
+                          key={m}
+                          className={`option-card ${carMode === m ? 'selected' : ''}`}
+                          onClick={() => setCarMode(m as any)}
+                          style={{ textAlign: 'left', paddingLeft: '1.5rem' }}
+                        >
+                          {m === '車出し可能' ? '🚐 車出しできます' : m === '同乗希望' ? '🙋 同乗希望です' : '🚲 送迎不要・自力'}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="label">伝言（備考）</label>
+                  <textarea 
+                    style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '2px solid #edf2f4', outline: 'none' }}
+                    rows={2}
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    placeholder="コーチへのメッセージがあれば"
+                  />
+                </div>
+
+                <button 
+                  className="btn-submit" 
+                  disabled={!status || (status !== '欠席' && !carMode) || submitting}
+                  onClick={handleSubmit}
+                >
+                  {submitting ? '送信中...' : '登録を完了する！'}
+                </button>
+              </>
             )}
-          </div>
+          </>
         );
       })()}
-
-      <div className="form-group">
-        <label className="label">コンディション</label>
-        <div className="options-grid">
-          {['出席', '欠席', '遅刻', '早退'].map(s => (
-            <div 
-              key={s}
-              className={`option-card ${status === s ? 'selected' : ''}`}
-              onClick={() => setStatus(s as any)}
-            >
-              {s === '出席' ? '⚾' : s === '欠席' ? '🏠' : s === '遅刻' ? '🏃' : '👋'} {s}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {status !== '欠席' && (
-        <div className="form-group">
-          <label className="label">配車</label>
-          <div className="options-grid" style={{ gridTemplateColumns: '1fr' }}>
-            {['車出し可能', '同乗希望', '不要'].map(m => (
-              <div 
-                key={m}
-                className={`option-card ${carMode === m ? 'selected' : ''}`}
-                onClick={() => setCarMode(m as any)}
-                style={{ textAlign: 'left', paddingLeft: '1.5rem' }}
-              >
-                {m === '車出し可能' ? '🚐 車出しできます' : m === '同乗希望' ? '🙋 同乗希望です' : '🚲 送迎不要・自力'}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="form-group">
-        <label className="label">伝言（備考）</label>
-        <textarea 
-          style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '2px solid #edf2f4', outline: 'none' }}
-          rows={2}
-          value={remarks}
-          onChange={(e) => setRemarks(e.target.value)}
-          placeholder="コーチへのメッセージがあれば"
-        />
-      </div>
-
-      <button 
-        className="btn-submit" 
-        disabled={!status || (status !== '欠席' && !carMode) || submitting}
-        onClick={handleSubmit}
-      >
-        {submitting ? '送信中...' : '登録を完了する！'}
-      </button>
 
       <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
         <button 

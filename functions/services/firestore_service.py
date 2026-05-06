@@ -82,16 +82,28 @@ class FirestoreService:
                 data[key] = self._format_doc(value)
         return data
 
-    def get_active_schedules(self, limit: int = 5) -> List[Dict[str, Any]]:
+    def get_active_schedules(self, limit: int = 20) -> List[Dict[str, Any]]:
         """
-        Fetches upcoming or active schedules.
+        Fetches upcoming schedules in chronological order.
         """
         try:
-            docs = self.db.collection("schedules").order_by("date", direction=firestore.Query.DESCENDING).limit(limit).stream()
+            # Use current date (start of today) for filtering
+            now = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # Query: Upcoming events, closest first
+            docs = self.db.collection("schedules")\
+                .where("date", ">=", now)\
+                .order_by("date", direction=firestore.Query.ASCENDING)\
+                .limit(limit)\
+                .stream()
+                
             schedules = []
             for doc in docs:
                 data = self._format_doc(doc.to_dict())
                 schedules.append({"id": doc.id, **data})
+            
+            # If we don't have enough upcoming ones, maybe the user wants to see recent past ones too?
+            # But usually "active" means upcoming. 
             return schedules
         except Exception as e:
             logging.error(f"Error fetching active schedules: {str(e)}", exc_info=True)

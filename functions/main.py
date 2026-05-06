@@ -48,10 +48,10 @@ def line_webhook(req: https_fn.Request) -> https_fn.Response:
                 reply_token = event["replyToken"]
                 user_message = event["message"]["text"]
                 
-                # Get schedule info for context
+                # Get schedule info for context (Increased limit for medium-term awareness)
                 fs = FirestoreService()
-                schedules = fs.get_active_schedules(limit=5)
-                schedule_context = f"直近のチーム予定データ: {json.dumps(schedules, ensure_ascii=False)}"
+                schedules = fs.get_active_schedules(limit=15)
+                schedule_context = f"直近〜中期のチーム予定データ: {json.dumps(schedules, ensure_ascii=False)}"
                 
                 # Use Gemini for intelligent reply
                 response_text = gemini.generate_bot_reply(user_message, context=schedule_context)
