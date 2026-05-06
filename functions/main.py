@@ -35,6 +35,16 @@ def line_webhook(req: https_fn.Request) -> https_fn.Response:
         
         for event in events:
             if event["type"] == "message" and event["message"]["type"] == "text":
+                source = event.get("source", {})
+                source_type = source.get("type")
+                
+                # In groups/rooms, only respond if mentioned
+                if source_type in ["group", "room"]:
+                    mentions = event["message"].get("mention", {}).get("mentionees", [])
+                    # If no mentions are present, we skip processing this message
+                    if not mentions:
+                        continue
+                
                 reply_token = event["replyToken"]
                 user_message = event["message"]["text"]
                 
@@ -47,12 +57,21 @@ def line_webhook(req: https_fn.Request) -> https_fn.Response:
                 response_text = gemini.generate_bot_reply(user_message, context=schedule_context)
                 line.reply_message(reply_token, response_text)
                 
-                # Record the conversation log
+                # Record the conversation log with structured data
                 try:
-                    user_id = event.get("source", {}).get("userId")
+                    user_id = source.get("userId")
+                    group_id = source.get("groupId") or source.get("roomId")
+                    
                     log_service = LogService()
-                    log_msg = f"User: {user_message}\nBot: {response_text}"
-                    log_service.record_action("BOT_CHAT", log_msg, user_id)
+                    log_service.record_action(
+                        "BOT_CHAT", 
+                        f"Chat Message", 
+                        user_id,
+                        user_input=user_message,
+                        bot_response=response_text,
+                        group_id=group_id,
+                        source_type=source_type
+                    )
                 except Exception as e:
                     logging.error(f"Failed to log chat: {str(e)}")
 

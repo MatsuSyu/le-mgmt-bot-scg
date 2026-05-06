@@ -7,7 +7,7 @@ class LogService:
     def __init__(self):
         self.firestore = FirestoreService()
 
-    def record_action(self, action_type: str, message: str, user_id: Optional[str] = None):
+    def record_action(self, action_type: str, message: str, user_id: Optional[str] = None, **kwargs):
         """
         Records a specific operation or event to Firestore for admin review.
         """
@@ -18,6 +18,9 @@ class LogService:
                 "message": message,
                 "user_id": user_id or "system",
             }
+            # Merge additional fields (e.g., user_input, bot_response)
+            log_data.update(kwargs)
+
             # Directly use firestore client to save to 'logs' collection
             self.firestore.db.collection("logs").add(log_data)
             logging.info(f"Operation recorded: {action_type} - {message}")
