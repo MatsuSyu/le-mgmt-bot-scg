@@ -46,6 +46,15 @@ def line_webhook(req: https_fn.Request) -> https_fn.Response:
                 # Use Gemini for intelligent reply
                 response_text = gemini.generate_bot_reply(user_message, context=schedule_context)
                 line.reply_message(reply_token, response_text)
+                
+                # Record the conversation log
+                try:
+                    user_id = event.get("source", {}).get("userId")
+                    log_service = LogService()
+                    log_msg = f"User: {user_message}\nBot: {response_text}"
+                    log_service.record_action("BOT_CHAT", log_msg, user_id)
+                except Exception as e:
+                    logging.error(f"Failed to log chat: {str(e)}")
 
         return https_fn.Response("OK")
     except Exception as e:
