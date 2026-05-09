@@ -34,7 +34,7 @@ class Config:
 
     @property
     def gemini_model(self) -> str:
-        return os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
+        return os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 
     @property
     def mailing_list_email(self) -> str:

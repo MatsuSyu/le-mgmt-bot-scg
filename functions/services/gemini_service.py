@@ -3,6 +3,7 @@ import logging
 import google.generativeai as genai
 from typing import Dict, Any, Optional
 from config import config
+from services.gem_instructions import SCORE_ASSISTANT_GEM
 
 class GeminiService:
     def __init__(self, api_key: Optional[str] = None):
@@ -124,19 +125,18 @@ class GeminiService:
             return "予定が更新されました。詳細は詳細画面を確認してください。"
 
     def generate_bot_reply(self, user_message: str, context: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Generates a friendly bot reply based on user message and optional context.
-        Returns a dict that might contain 'text' and 'tool_calls'.
-        """
+        """Generates a friendly bot reply using the SCORE_ASSISTANT_GEM asset."""
         liff_url = "https://liff.line.me/2004699424-QfmD6MxZ"
         
-        # Tools definition
+        # Format the Gem with dynamic variables
+        system_instruction = SCORE_ASSISTANT_GEM.format(liff_url=liff_url)
+
         tools = [
             {
                 "function_declarations": [
                     {
                         "name": "register_schedule",
-                        "description": "新しい予定（練習、試合、イベントなど）を登録します。",
+                        "description": "新しい予定（練習、試合、遠征、学校行事など）を登録します。",
                         "parameters": {
                             "type": "OBJECT",
                             "properties": {
@@ -181,76 +181,22 @@ class GeminiService:
             }
         ]
 
-        prompt = f"""
-あなたは少年野球チーム「リトルイーグルス」の熱血かつ事務能力に長けたチームマネージャー兼広報担当AIです。
-監督、コーチ、保護者からの問い合わせや、事務的な依頼に対して、フレンドリーかつテキパキと回答・処理してください。
-
-【重要：登録のカテゴリー分け】
-ユーザーからの登録依頼に対して、以下の3つのカテゴリーを適切に使い分けてください。
-
-1. **チーム予定（練習・試合・遠征など）**
-   - 選手・保護者が参加し、出欠を取る必要があるもの。
-   - `register_schedule` を使用してください。
-   - 例：「来週日曜、A面で9時から練習追加」「25日にジュニアの大会（〇〇杯）が入った。弁当必要」
-
-2. **学校行事**
-   - 小学校の行事など、チーム活動の出席に影響するもの。
-   - `register_schedule` を使用し、`type` を「学校行事」に設定してください。
-   - 例：「21日は〇〇小の運動会。練習なし」
-
-3. **球場確保（グラウンド予約）**
-   - 球場の予約状況のみを管理するもの（チームの具体的な活動が決まっていない場合でも可）。
-   - `register_ground_reservation` を使用してください。
-   - 例：「10日の13-17時、遊水地Aを確保しました」「3日の午後、球場空きあります」
-
-【重要：回答スタイル】
-1. 非常に簡潔に、端的に回答してください。
-2. 情報を落とさず、文字数を最小限に圧縮してください。
-4. キャラクター性（熱血マネージャー）は維持しつつも、冗長な挨拶や修飾語は避けてください。
-
-【予定に関する回答】
-1. 予定の詳細（具体的な時間、場所、持ち物、出欠状況など）について聞かれた場合のみ、回答の最後に「詳細/出欠: {liff_url}」を添えてください。
-2. 予定以外の一般的な質問（チームの方針、道具について、雑談など）に対しては、予定のリンクを貼らないでください。
-
-【予定の登録】
-1. 予定の依頼（例：「来週日曜に練習追加」）があれば、`register_schedule` ツールを呼び出してください。
-2. 日付・場所・予定種別（練習・試合など）が不明確な場合は、ツールを呼び出さずにユーザーに不足情報を簡潔に聞き返してください。
-3. 「弁当」「お弁当」の有無、対象学年（レギュラー、ジュニアなど）も文脈から読み取り、反映させてください。
-
-【チーム情報・体験案内】
-1. 体験入部や見学の問い合わせには、歓迎の意を示しつつ、直近の「体験会」や「練習」の日時をコンテキストから探して案内してください。
-2. チームの基本情報（活動場所、学年構成など）についても、知っている範囲で自信を持って回答してください。
-
-【指示】
-1. メッセージの内容を分析し、最適な回答を行ってください。
-2. 予定以外の質問（野球のルール、道具の相談、雑談など）に対しても、物知りなマネージャーとして親身に回答してください。
-3. 情報がコンテキストにない場合でも、謝罪を繰り返すのではなく、「事務局に確認します！」や、自身の知識に基づいた一般的なアドバイスを前向きに提供してください。
-4. 200文字以内で簡潔にまとめてください。
-
-状況コンテキスト: {context if context else '特別な情報なし'}
-ユーザーのメッセージ: {user_message}
-"""
         try:
-            logging.info(f"Generating content with model: {config.gemini_model}")
-            try:
-                model = genai.GenerativeModel(config.gemini_model, tools=tools)
-            except Exception as e:
-                logging.warning(f"Failed to initialize model with tools: {str(e)}. Falling back to no-tools.")
-                model = genai.GenerativeModel(config.gemini_model)
+            # Initialize model with system_instruction (the "Gem")
+            model = genai.GenerativeModel(
+                model_name=config.gemini_model,
+                tools=tools,
+                system_instruction=system_instruction
+            )
             
+            prompt = f"状況コンテキスト: {context if context else 'なし'}\nユーザーのメッセージ: {user_message}"
             response = model.generate_content(prompt)
             
-            # Safely extract text
             response_text = ""
-            try:
-                response_text = response.text
-            except Exception:
-                # If no text part exists (e.g. only tool call), this might fail
-                pass
+            try: response_text = response.text
+            except Exception: pass
             
             result = {"text": response_text, "tool_calls": []}
-            
-            # Check for tool calls in parts
             if response.candidates and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
                     if part.function_call:
@@ -261,5 +207,5 @@ class GeminiService:
             
             return result
         except Exception as e:
-            logging.error(f"Gemini reply error: {str(e)}")
-            return {"text": f"『{user_message}』ですね！了解しました！ナイスプレイ！"}
+            logging.error(f"Gemini reply error: {str(e)}", exc_info=True)
+            return {"text": f"すみません内部的にエラーが出ているようです。"}

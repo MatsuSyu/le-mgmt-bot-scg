@@ -36,7 +36,8 @@ const MemberManager: React.FC = () => {
     short_name: '',
     emergency_contact: '',
     allergies: '',
-    notes: ''
+    notes: '',
+    line_display_name: ''
   });
 
   useEffect(() => {
@@ -156,7 +157,8 @@ const MemberManager: React.FC = () => {
       short_name: m.short_name || '',
       emergency_contact: m.emergency_contact || '',
       allergies: m.allergies || '',
-      notes: m.notes || ''
+      notes: m.notes || '',
+      line_display_name: m.line_display_name || ''
     });
     setShowAddForm(true);
     setShowBulkForm(false);
@@ -167,7 +169,8 @@ const MemberManager: React.FC = () => {
     setEditingMember(null);
     setNewMember({ 
       name: '', role: 'player', number: '', nickname: '', grade: '', 
-      school_name: '', short_name: '', emergency_contact: '', allergies: '', notes: '' 
+      school_name: '', short_name: '', emergency_contact: '', allergies: '', notes: '',
+      line_display_name: ''
     });
     setShowAddForm(false);
   };
@@ -401,6 +404,16 @@ const MemberManager: React.FC = () => {
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
               />
             </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>LINE表示名</label>
+              <input 
+                type="text" 
+                value={newMember.line_display_name} 
+                onChange={(e) => setNewMember({...newMember, line_display_name: e.target.value})}
+                placeholder="LINE側の名前"
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
+              />
+            </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>備考</label>
               <textarea 
@@ -434,12 +447,11 @@ const MemberManager: React.FC = () => {
                     onChange={toggleSelectAll}
                   />
                 </th>
-                <th>氏名</th>
-                <th>役割</th>
-                <th>背番号</th>
-                <th>所属/学年</th>
-                <th>LINE連携</th>
-                <th>操作</th>
+                <th>氏名 / 学年</th>
+                <th>LINE名 / 連携状態</th>
+                <th>役割 / 背番号</th>
+                <th>所属学校</th>
+                <th style={{ width: '150px' }}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -457,41 +469,42 @@ const MemberManager: React.FC = () => {
                     </td>
                     <td style={{ fontWeight: 600 }}>
                       <div>{m.name}</div>
-                      {m.nickname && <div style={{ fontSize: '0.7rem', color: '#666' }}>（{m.nickname}）</div>}
-                    </td>
-                    <td>
-                      <span className={`badge ${
-                        m.role === 'coach' ? 'badge-danger' : 
-                        m.role === 'parent' ? 'badge-primary' : 
-                        m.role === 'coach_parent' ? 'badge-warning' : 'badge-success'
-                      }`}>
-                        {m.role === 'coach' ? '指導者' : 
-                         m.role === 'parent' ? '保護者' : 
-                         m.role === 'coach_parent' ? '指導者/保護者' : '選手'}
-                      </span>
-                    </td>
-                    <td>{m.number || '-'}</td>
-                    <td>
-                      <div style={{ fontSize: '0.85rem' }}>{m.short_name || m.school_name || (m as any).elementary_school || '-'}</div>
-                      {m.role === 'player' && <div style={{ fontSize: '0.75rem', color: '#888' }}>{m.grade || '?'} 年</div>}
+                      <div style={{ fontSize: '0.7rem', color: '#666' }}>
+                        {m.nickname && `（${m.nickname}）`} {m.grade ? `${m.grade}年生` : ''}
+                      </div>
                     </td>
                     <td>
                       {m.line_user_id ? (
                         <div>
-                          <div style={{ fontSize: '0.8rem', color: '#00B900', fontWeight: 'bold' }}>✅ 連携済み</div>
-                          {m.line_display_name && <div style={{ fontSize: '0.7rem', color: '#666' }}>({m.line_display_name})</div>}
+                          <div style={{ fontWeight: 'bold', color: m.line_display_name ? '#059669' : '#9ca3af', fontSize: '0.85rem' }}>
+                            {m.line_display_name || '(名前未取得)'}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#00B900' }}>✅ 連携済み</div>
                           <button 
                             className="btn-secondary"
-                            onClick={() => refreshLineProfile(m.id, m.line_user_id!)}
-                            style={{ fontSize: '0.65rem', padding: '2px 6px', marginTop: '4px', height: 'auto', minHeight: 'unset' }}
+                            onClick={(e) => { e.stopPropagation(); refreshLineProfile(m.id, m.line_user_id!); }}
+                            style={{ fontSize: '0.6rem', padding: '1px 5px', marginTop: '3px', height: 'auto' }}
                           >
-                            🔄 名前更新
+                            🔄 更新
                           </button>
                         </div>
                       ) : (
                         <span style={{ fontSize: '0.8rem', color: '#ccc' }}>未連携</span>
                       )}
                     </td>
+                    <td>
+                      <span className={`badge ${
+                        m.role === 'coach' ? 'badge-danger' : 
+                        m.role === 'parent' ? 'badge-primary' : 
+                        m.role === 'coach_parent' ? 'badge-warning' : 'badge-success'
+                      }`} style={{ fontSize: '0.65rem' }}>
+                        {m.role === 'coach' ? '指導者' : 
+                         m.role === 'parent' ? '保護者' : 
+                         m.role === 'coach_parent' ? '指導者/保護者' : '選手'}
+                      </span>
+                      {m.number && <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>#{m.number}</div>}
+                    </td>
+                    <td style={{ fontSize: '0.8rem' }}>{m.short_name || m.school_name || '-'}</td>
                     <td>
                       <button 
                         className="btn-secondary" 

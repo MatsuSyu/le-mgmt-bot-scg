@@ -54,40 +54,24 @@ def line_webhook(req: https_fn.Request) -> https_fn.Response:
                 reply_token = event["replyToken"]
                 user_message = event["message"]["text"]
                 
-                # Get schedule and attendance info for context
+                # Get limited context (Cost optimization)
                 fs = FirestoreService()
-                schedules = fs.get_active_schedules(limit=10)
+                schedules = fs.get_active_schedules(limit=5)
                 
-                # Fetch attendance for the next 3 schedules for more detailed context
                 attendance_context = ""
                 if schedules:
-                    next_few_ids = [s["id"] for s in schedules[:3]]
-                    attendance = fs.get_attendance_for_schedules(next_few_ids)
-                    members = fs.get_all_members()
-                    member_map = {m["id"]: m.get("short_name") or m.get("name") for m in members}
-                    
-                    att_summary = {}
-                    for sid in next_few_ids:
-                        att_summary[sid] = {"出席": [], "欠席": [], "未回答": []}
-                        
-                        answered_user_ids = set()
-                        for a in [att for att in attendance if att["schedule_id"] == sid]:
-                            name = member_map.get(a["user_id"], "不明")
-                            answered_user_ids.add(a["user_id"])
-                            if a.get("status") == "出席": att_summary[sid]["出席"].append(name)
-                            elif a.get("status") == "欠席": att_summary[sid]["欠席"].append(name)
-                        
-                        # Find unanswered
-                        unanswered = [m.get("short_name") or m.get("name") for m in members if m["id"] not in answered_user_ids]
-                        att_summary[sid]["未回答"] = unanswered[:15] # Limit for context size
-                    
-                    attendance_context = f"\n直近3件の出欠状況(出席者名・未回答者名): {json.dumps(att_summary, ensure_ascii=False)}"
+                    next_sid = schedules[0]["id"]
+                    attendance = fs.get_attendance_for_schedules([next_sid])
+                    counts = {"出席": 0, "欠席": 0, "未回答": 0}
+                    for a in attendance:
+                        s = a.get("status", "未回答")
+                        if s in counts: counts[s] += 1
+                    attendance_context = f"\n直近予定の出欠数: {json.dumps(counts, ensure_ascii=False)}"
 
                 user_id = source.get("userId")
                 member_info = fs.get_members_by_line_id(user_id) if user_id else []
-                user_context = f"\n発信者情報: {'連携済み (' + member_info[0]['name'] + ')' if member_info else '未連携'}"
-                
-                schedule_context = f"予定データ: {json.dumps(schedules, ensure_ascii=False)}{attendance_context}{user_context}"
+                user_context = f"\n発信者: {'連携済(' + member_info[0]['name'] + ')' if member_info else '未連携'}"
+                schedule_context = f"予定(5件): {json.dumps(schedules, ensure_ascii=False)}{attendance_context}{user_context}"
                 
                 # Use Gemini for intelligent reply
                 reply_data = gemini.generate_bot_reply(user_message, context=schedule_context)
@@ -461,13 +445,20 @@ def get_line_profile(req: https_fn.Request) -> https_fn.Response:
             if data: user_id = data.get("user_id")
             
         if not user_id:
+            logging.warning("get_line_profile called without user_id")
             return https_fn.Response("Missing user_id", status=400, mimetype="application/json")
         
+        logging.info(f"Fetching LINE profile for user_id: {user_id}")
         line = LineService()
         profile = line.get_profile(user_id)
+        
+        if not profile or "displayName" not in profile:
+            logging.error(f"Failed to fetch profile for {user_id}. Response: {profile}")
+            return https_fn.Response(json.dumps({"error": "Profile not found"}), status=404, mimetype="application/json")
+
         return https_fn.Response(json.dumps(profile, ensure_ascii=False), mimetype="application/json")
     except Exception as e:
-        logging.error(f"Get profile error: {str(e)}")
+        logging.error(f"Get profile error for {user_id if 'user_id' in locals() else 'unknown'}: {str(e)}", exc_info=True)
         return https_fn.Response(str(e), status=500)
 
 @https_fn.on_request(
