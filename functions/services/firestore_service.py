@@ -139,6 +139,29 @@ class FirestoreService:
             return []
 
     # --- Schedule History & AI ---
+    def find_existing_schedule(self, date: datetime, target_categories: List[str]) -> Optional[str]:
+        """Checks if a schedule exists for the same date and target categories."""
+        try:
+            # Start of day and end of day for the given date
+            start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_of_day = date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+            query = self.db.collection("schedules")\
+                .where("date", ">=", start_of_day)\
+                .where("date", "<=", end_of_day)
+            
+            docs = query.stream()
+            for doc in docs:
+                data = doc.to_dict()
+                existing_cats = data.get("target_categories", [])
+                # If any category overlaps, consider it a match for deduplication
+                if any(cat in existing_cats for cat in target_categories):
+                    return doc.id
+            return None
+        except Exception as e:
+            logging.error(f"Error finding existing schedule: {str(e)}", exc_info=True)
+            return None
+
     def update_schedule_with_history(self, schedule_id: Optional[str], new_data: Dict[str, Any], change_summary: str = ""):
         try:
             # Handle date conversion if it's a string
@@ -152,6 +175,9 @@ class FirestoreService:
                 except Exception as e:
                     logging.warning(f"Failed to convert date string '{new_data['date']}': {e}")
 
+            now = firestore.SERVER_TIMESTAMP
+            new_data["updated_at"] = now
+
             if schedule_id:
                 doc_ref = self.db.collection("schedules").document(schedule_id)
                 old_doc = doc_ref.get()
@@ -162,17 +188,21 @@ class FirestoreService:
                 doc_ref = self.db.collection("schedules").document()
                 schedule_id = doc_ref.id
                 old_data = {}
+                new_data["created_at"] = now
                 doc_ref.set(new_data)
 
             # Record history
             self.db.collection("schedule_history").add({
                 "schedule_id": schedule_id,
-                "changed_at": firestore.SERVER_TIMESTAMP,
+                "changed_at": now,
                 "before_data": old_data,
                 "after_data": new_data,
                 "change_summary": change_summary
             })
             return old_data, schedule_id
+        except Exception as e:
+            logging.error(f"Error updating schedule with history: {str(e)}", exc_info=True)
+            return None, None
         except Exception as e:
             logging.error(f"Error updating schedule with history: {str(e)}", exc_info=True)
             return None, None
@@ -198,6 +228,24 @@ class FirestoreService:
         res = self.get_unique_field_values(["location", "location_from", "location_to"])
         all_locs = set(res["location"] + res["location_from"] + res["location_to"])
         return sorted(list(all_locs))
+    def get_attendance_for_schedules(self, schedule_ids: List[str]) -> List[Dict[str, Any]]:
+        try:
+            if not schedule_ids: return []
+            # Firestore 'in' query limit is 30, we have max 20 schedules
+            docs = self.db.collection("attendance").where("schedule_id", "in", schedule_ids).stream()
+            return [{"id": doc.id, **self._format_doc(doc.to_dict())} for doc in docs]
+        except Exception as e:
+            logging.error(f"Error fetching attendance for schedules: {str(e)}", exc_info=True)
+            return []
+
+    def unlink_member(self, member_id: str):
+        try:
+            self.db.collection("members").document(member_id).update({"line_user_id": None})
+            return True
+        except Exception as e:
+            logging.error(f"Error unlinking member {member_id}: {str(e)}", exc_info=True)
+            return False
+
     def get_all_members(self) -> List[Dict[str, Any]]:
         try:
             docs = self.db.collection("members").stream()
@@ -205,3 +253,20 @@ class FirestoreService:
         except Exception as e:
             logging.error(f"Error fetching all members: {str(e)}", exc_info=True)
             return []
+
+    # --- Ground Reservations ---
+    def update_ground_reservation(self, data: Dict[str, Any], res_id: Optional[str] = None) -> str:
+        try:
+            if not res_id:
+                res_id = f"res_{int(datetime.now().timestamp() * 1000)}"
+            
+            doc_ref = self.db.collection("stadium_reservations").document(res_id)
+            data["updated_at"] = firestore.SERVER_TIMESTAMP
+            if not res_id.startswith("res_"): # If it's a new one created by us
+                 data["created_at"] = firestore.SERVER_TIMESTAMP
+            
+            doc_ref.set(data, merge=True)
+            return res_id
+        except Exception as e:
+            logging.error(f"Error updating ground reservation: {str(e)}", exc_info=True)
+            return ""

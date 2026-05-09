@@ -72,7 +72,11 @@ class SheetsService:
     def sync_detailed_report(self, schedule: Dict, members: List[Dict], attendance: List[Dict]) -> bool:
         """
         Creates a detailed attendance list for a specific event.
+        Skips school events as they are reference only.
         """
+        if schedule.get("type") == "学校行事":
+            return True
+            
         # Robust date handling for sheet name
         raw_date = schedule.get('date', '0000-00-00')
         date_str = str(raw_date)[:10] if raw_date else "0000-00-00"

@@ -31,15 +31,16 @@
 - **admin-dashboard/** (管理者用):
   - PC・タブレット向けの全体監視画面。
   - **Home**: 出欠状況のリアルタイム表示（日本語化済み）、統計カード、操作ログビューア。
-  - **Members**: 選手・指導者・保護者の名簿管理。役割「指導者 兼 保護者」に対応し、学校名/略称、緊急連絡先、アレルギー情報を保持。
+  - **Members**: 選手・指導者・保護者の名簿管理。役割「指導者 兼 保護者」に対応し、学校名/略称、緊急連絡先、アレルギー情報を保持。複数人の一括登録（バルクインサート）に対応。
   - **Schedule**: 予定の登録・編集。AIによる変更要約コメントの自動付与および管理者による詳細備考（自由入力）に対応。
+  - **Grounds**: 球場の確保状況管理。日付、場所、時間枠、予約ステータス（申請中/確保済）を管理。
   - **Cars**: 車両マスター管理。車種、色、定員（運転手含）、基本提供設定を管理。
 
 - **liff-app/** (保護者用):
   - スマホ向け軽量回答画面。
-  - **Step 1 (連携/選択)**: 名簿とのLINE連携および回答対象メンバーの選択（兄弟・親子対応）。
-  - **Step 2 (入力)**: コンディション（出席/欠席/遅刻/早退）および配車（車出し/同乗/不要）の選択。
-  - **Step 3 (完了)**: 回答送信後の完了画面を表示（自動クローズを廃止し、UXを向上）。
+  - **Step 1 (連携/選択)**: 名簿とのLINE連携および回答対象メンバーの選択（兄弟・親子対応）。連携解除機能もここに含まれる。
+  - **Step 2 (予定一覧)**: 回答が必要なチーム予定と参照用の学校行事をリスト形式（カード）で表示。回答済み状況や出席人数も確認可能。
+  - **Step 3 (回答入力)**: 選択した予定に対するコンディション（出席/欠席/遅刻/早退）および配車（車出し/同乗/不要）の選択。
 
 ## 3. セキュリティ・保守規程
 - **署名検証**: `utils/signature.py` により、LINEからの正規のリクエストであることを保証。
@@ -55,5 +56,5 @@
 - **schedules**: `{schedule_id}`: `{ date, type, location, location_from, location_to, tournament_name, opponent, target_categories, description, ai_change_comment }`
 - **attendance**: `{schedule_id}_{user_id}`: `{ status, car_info: { mode }, remarks, updated_at }`
 - **cars**: `{id}`: `{ owner_name, max_seats, car_model, car_color, notes, is_available }`
-- **logs**: `{ id }`: `{ timestamp, action_type, message, user_id }`
-- **messages**: `{ id }`: `{ timestamp, user_id, text, ai_reply }`
+- **stadium_reservations**: `{id}`: `{ date, stadium_name, time_slot, status, notes, created_at }`
+- **logs**: `{ id }`: `{ timestamp, action_type, message, user_id, user_input, bot_response, group_id, source_type }`

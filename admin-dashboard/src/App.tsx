@@ -6,12 +6,16 @@ import LogViewer from './components/LogViewer'
 import MemberManager from './components/MemberManager'
 import ScheduleManager from './components/ScheduleManager'
 import CarManager from './components/CarManager'
+import GroundManager from './components/GroundManager'
+import BroadcastManager from './components/BroadcastManager'
 import { db } from './firebase'
 import './index.css'
 
 function App() {
   const [activeTab, setActiveTab] = useState('home')
   const [records, setRecords] = useState<any[]>([])
+  const [members, setMembers] = useState<any[]>([])
+  const [schedules, setSchedules] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -28,7 +32,24 @@ function App() {
       setLoading(false)
     })
 
-    return () => unsubscribe()
+    // Also listen to members and schedules
+    const unsubMembers = onSnapshot(collection(db, "members"), (snapshot) => {
+      const data: any[] = []
+      snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }))
+      setMembers(data)
+    })
+
+    const unsubSchedules = onSnapshot(collection(db, "schedules"), (snapshot) => {
+      const data: any[] = []
+      snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }))
+      setSchedules(data)
+    })
+
+    return () => {
+      unsubscribe()
+      unsubMembers()
+      unsubSchedules()
+    }
   }, [])
 
   const presentCount = records.filter(r => r.status === '出席').length
@@ -48,8 +69,8 @@ function App() {
               total={records.length} 
               carpoolShortage={carpoolShortage}
             />
-            <AttendanceTable records={records} />
-            <LogViewer />
+            <AttendanceTable records={records} members={members} schedules={schedules} />
+            <LogViewer members={members} />
           </>
         )
       case 'members':
@@ -58,6 +79,10 @@ function App() {
         return <ScheduleManager />
       case 'cars':
         return <CarManager />
+      case 'grounds':
+        return <GroundManager />
+      case 'broadcast':
+        return <BroadcastManager />
       default:
         return null
     }
@@ -115,7 +140,9 @@ function App() {
         <div className={`nav-tab ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>🏠 ホーム</div>
         <div className={`nav-tab ${activeTab === 'members' ? 'active' : ''}`} onClick={() => setActiveTab('members')}>👥 メンバー</div>
         <div className={`nav-tab ${activeTab === 'schedules' ? 'active' : ''}`} onClick={() => setActiveTab('schedules')}>📅 予定</div>
+        <div className={`nav-tab ${activeTab === 'grounds' ? 'active' : ''}`} onClick={() => setActiveTab('grounds')}>🏟️ 球場確保</div>
         <div className={`nav-tab ${activeTab === 'cars' ? 'active' : ''}`} onClick={() => setActiveTab('cars')}>🚗 車両</div>
+        <div className={`nav-tab ${activeTab === 'broadcast' ? 'active' : ''}`} onClick={() => setActiveTab('broadcast')}>📢 お知らせ</div>
       </nav>
 
       <main>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, orderBy, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where, getDocs, deleteDoc, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 
 interface Schedule {
@@ -17,11 +17,13 @@ interface Schedule {
   target_categories: string[];
   description?: string;
   ai_change_comment?: string;
+  has_lunch?: boolean;
 }
 
 const ScheduleManager: React.FC = () => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'team' | 'school'>('team');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [newSchedule, setNewSchedule] = useState({ 
@@ -35,9 +37,11 @@ const ScheduleManager: React.FC = () => {
     meeting_time: '',
     meeting_time_car: '',
     referee_needed: false,
+    has_lunch: false,
     target: 'all',
     description: ''
   });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
   const [filter, setFilter] = useState({
@@ -77,6 +81,10 @@ const ScheduleManager: React.FC = () => {
 
   const filteredSchedules = schedules
     .filter(s => {
+      const isSchool = s.type === '学校行事';
+      if (activeTab === 'team' && isSchool) return false;
+      if (activeTab === 'school' && !isSchool) return false;
+
       const sDate = s.date?.toDate ? s.date.toDate() : new Date(s.date);
       const sDateStr = sDate.toISOString().split('T')[0];
       if (filter.startDate && sDateStr < filter.startDate) return false;
@@ -99,7 +107,6 @@ const ScheduleManager: React.FC = () => {
 
   const handleEditClick = (s: Schedule) => {
     setEditingSchedule(s);
-    // Convert Firestore timestamp to YYYY-MM-DD for input[type="date"]
     let dateStr = '';
     if (s.date) {
       const d = s.date.toDate ? s.date.toDate() : new Date(s.date);
@@ -117,6 +124,7 @@ const ScheduleManager: React.FC = () => {
       meeting_time: s.meeting_time || '',
       meeting_time_car: s.meeting_time_car || '',
       referee_needed: s.referee_needed || false,
+      has_lunch: s.has_lunch || false,
       target: s.target_categories?.[0] || 'all',
       description: s.description || ''
     });
@@ -127,8 +135,8 @@ const ScheduleManager: React.FC = () => {
   const handleCancelEdit = () => {
     setEditingSchedule(null);
     setNewSchedule({ 
-      date: '', type: '練習', location: '', location_from: '', location_to: '',
-      tournament_name: '', opponent: '', meeting_time: '', meeting_time_car: '', referee_needed: false, target: 'all', description: ''
+      date: '', type: activeTab === 'school' ? '学校行事' : '練習', location: '', location_from: '', location_to: '',
+      tournament_name: '', opponent: '', meeting_time: '', meeting_time_car: '', referee_needed: false, has_lunch: false, target: 'all', description: ''
     });
     setShowAddForm(false);
   };
@@ -136,7 +144,7 @@ const ScheduleManager: React.FC = () => {
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSchedule.date || !newSchedule.location) {
-      alert("日付と場所は必須入力です！");
+      alert("日付と名称/場所は必須入力です！");
       return;
     }
     try {
@@ -145,7 +153,7 @@ const ScheduleManager: React.FC = () => {
         id: editingSchedule?.id || null,
         data: {
           date: newSchedule.date,
-          type: newSchedule.type,
+          type: activeTab === 'school' ? '学校行事' : newSchedule.type,
           location: newSchedule.location,
           location_from: newSchedule.location_from,
           location_to: newSchedule.location_to,
@@ -154,6 +162,7 @@ const ScheduleManager: React.FC = () => {
           meeting_time: newSchedule.meeting_time,
           meeting_time_car: newSchedule.meeting_time_car,
           referee_needed: newSchedule.referee_needed,
+          has_lunch: newSchedule.has_lunch,
           target_categories: [newSchedule.target],
           description: newSchedule.description
         }
@@ -176,6 +185,50 @@ const ScheduleManager: React.FC = () => {
     }
   };
 
+  const handleDeleteSchedule = async (id: string, date: any) => {
+    const dateStr = formatScheduleDate(date);
+    if (!window.confirm(`「${dateStr}」の予定を削除してもよろしいですか？\nこの操作は取り消せません。`)) return;
+    try {
+      await deleteDoc(doc(db, "schedules", id));
+      setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("削除に失敗しました。");
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`選択した ${selectedIds.length} 件の予定を一括削除してもよろしいですか？\nこの操作は取り消せません。`)) return;
+
+    try {
+      const batch = writeBatch(db);
+      selectedIds.forEach(id => {
+        batch.delete(doc(db, "schedules", id));
+      });
+      await batch.commit();
+      alert("一括削除が完了しました。");
+      setSelectedIds([]);
+    } catch (err) {
+      console.error("Bulk delete error:", err);
+      alert("一括削除に失敗しました。");
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredSchedules.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredSchedules.map(s => s.id));
+    }
+  };
+
+  const toggleSelectSchedule = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
   const formatScheduleDate = (date: any) => {
     if (!date) return '未設定';
     try {
@@ -196,7 +249,6 @@ const ScheduleManager: React.FC = () => {
     setViewingAttendanceFor(s);
     setLoadingAttendance(true);
     try {
-      // Fetch members first to have a name map
       if (Object.keys(memberNames).length === 0) {
         const memSnapshot = await getDocs(collection(db, "members"));
         const names: Record<string, string> = {};
@@ -223,12 +275,10 @@ const ScheduleManager: React.FC = () => {
     const lines = filteredSchedules.map(s => {
       const dateStr = formatScheduleDate(s.date);
       const isSchoolEvent = s.type === '学校行事';
-      
-      // 学校行事の場合は集合時間を省き、絵文字を変える
       const emoji = isSchoolEvent ? '🏫' : '🗓';
       const timeStr = (!isSchoolEvent && s.meeting_time) ? ` ${s.meeting_time}集合` : '';
       const typeStr = ` ${s.type}`;
-      const targetStr = (!isSchoolEvent && s.target_categories && s.target_categories[0] !== 'all') ? `(${s.target_categories.join(',')})` : '';
+      const targetStr = (s.target_categories && s.target_categories[0] !== 'all') ? `(${s.target_categories.join(',')})` : '';
       const locStr = ` ＠${s.location}`;
       
       let extra = [];
@@ -243,8 +293,11 @@ const ScheduleManager: React.FC = () => {
         extra.push(`🚗${s.location_from}→${s.location_to}${s.meeting_time_car ? `(${s.meeting_time_car}配車)` : ''}`);
       }
       
+      if (s.has_lunch) {
+        extra.push('🍱弁当必要');
+      }
+      
       if (s.description) {
-        // Replace newlines with spaces to compress text
         extra.push(`※${s.description.replace(/\n/g, ' ')}`);
       }
 
@@ -255,7 +308,7 @@ const ScheduleManager: React.FC = () => {
       return mainLine;
     });
 
-    return `【予定表】\n${lines.join('\n\n')}`;
+    return `【${activeTab === 'school' ? '学校行事予定' : 'チーム予定表'}】\n${lines.join('\n\n')}`;
   };
 
   const [copying, setCopying] = useState(false);
@@ -264,21 +317,16 @@ const ScheduleManager: React.FC = () => {
     setCopying(true);
     try {
       await navigator.clipboard.writeText(text);
-      alert('クリップボードにコピーしました！LINEに貼り付けて共有できます。');
+      alert('クリップボードにコピーしました！');
     } catch (err) {
       console.error('Failed to copy text: ', err);
-      // Fallback for older browsers or unsupported contexts
       const textArea = document.createElement("textarea");
       textArea.value = text;
       document.body.appendChild(textArea);
       textArea.select();
-      try {
-        document.execCommand('copy');
-        alert('クリップボードにコピーしました！LINEに貼り付けて共有できます。');
-      } catch (e) {
-        alert('コピーに失敗しました。手動でテキストを選択してコピーしてください。');
-      }
+      document.execCommand('copy');
       document.body.removeChild(textArea);
+      alert('クリップボードにコピーしました！');
     } finally {
       setCopying(false);
     }
@@ -286,11 +334,35 @@ const ScheduleManager: React.FC = () => {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h3>📅 予定管理</h3>
-        <button className="btn-primary" onClick={() => showAddForm ? handleCancelEdit() : setShowAddForm(true)}>
-          {showAddForm ? '閉じる' : '+ 予定追加'}
+      <div className="tabs" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '2px solid #edf2f4' }}>
+        <button 
+          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`} 
+          onClick={() => { setActiveTab('team'); setShowAddForm(false); }}
+          style={{ padding: '0.8rem 1.5rem', background: 'none', border: 'none', borderBottom: activeTab === 'team' ? '3px solid var(--primary)' : 'none', fontWeight: 700, cursor: 'pointer', color: activeTab === 'team' ? 'var(--primary)' : '#8d99ae' }}
+        >
+          ⚾ チーム予定
         </button>
+        <button 
+          className={`tab-btn ${activeTab === 'school' ? 'active' : ''}`} 
+          onClick={() => { setActiveTab('school'); setShowAddForm(false); }}
+          style={{ padding: '0.8rem 1.5rem', background: 'none', border: 'none', borderBottom: activeTab === 'school' ? '3px solid var(--warning)' : 'none', fontWeight: 700, cursor: 'pointer', color: activeTab === 'school' ? 'var(--warning)' : '#8d99ae' }}
+        >
+          🏫 学校行事予定
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <h3>{activeTab === 'team' ? '⚾ チーム予定管理' : '🏫 学校行事・その他管理'}</h3>
+        <div style={{ display: 'flex', gap: '0.8rem' }}>
+          {selectedIds.length > 0 && (
+            <button className="btn-secondary" onClick={handleBulkDelete} style={{ background: '#ff4d4f', color: 'white', border: 'none' }}>
+              🗑️ {selectedIds.length}件を一括削除
+            </button>
+          )}
+          <button className={activeTab === 'team' ? "btn-primary" : "btn-warning"} onClick={() => showAddForm ? handleCancelEdit() : setShowAddForm(true)}>
+            {showAddForm ? '閉じる' : activeTab === 'team' ? '+ 予定追加' : '+ 行事追加'}
+          </button>
+        </div>
       </div>
 
       {viewingAttendanceFor && (
@@ -341,8 +413,8 @@ const ScheduleManager: React.FC = () => {
         <form onSubmit={handleAddSchedule} style={{ marginBottom: '2rem', padding: '1.2rem', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #eee' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
             <div style={{ gridColumn: '1 / -1' }}>
-              <h4 style={{ margin: 0, fontSize: '1rem', color: editingSchedule ? '#e63946' : '#2a9d8f' }}>
-                {editingSchedule ? '📝 予定の編集' : '✨ 新規予定の登録'}
+              <h4 style={{ margin: 0, fontSize: '1rem', color: editingSchedule ? '#e63946' : activeTab === 'team' ? '#2a9d8f' : '#f4a261' }}>
+                {editingSchedule ? '📝 編集' : `✨ ${activeTab === 'team' ? 'チーム予定' : '学校行事'}の登録`}
               </h4>
             </div>
 
@@ -356,39 +428,45 @@ const ScheduleManager: React.FC = () => {
                   style={{ flex: 2, padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
                   required
                 />
-                <input 
-                  type="time" 
-                  value={newSchedule.meeting_time} 
-                  onChange={(e) => setNewSchedule({...newSchedule, meeting_time: e.target.value})}
-                  style={{ flex: 1, padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
-                  placeholder="集合"
-                />
+                {activeTab === 'team' && (
+                  <input 
+                    type="time" 
+                    value={newSchedule.meeting_time} 
+                    onChange={(e) => setNewSchedule({...newSchedule, meeting_time: e.target.value})}
+                    style={{ flex: 1, padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+                    placeholder="集合"
+                  />
+                )}
               </div>
             </div>
+
+            {activeTab === 'team' ? (
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>種別*</label>
+                <select 
+                  value={newSchedule.type} 
+                  onChange={(e) => setNewSchedule({...newSchedule, type: e.target.value})}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+                  required
+                >
+                  <option value="練習">練習</option>
+                  <option value="試合">試合</option>
+                  <option value="体験会">体験会</option>
+                  <option value="合宿">合宿</option>
+                  <option value="球場確保">球場確保</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+            ) : null}
+
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>種別*</label>
-              <select 
-                value={newSchedule.type} 
-                onChange={(e) => setNewSchedule({...newSchedule, type: e.target.value})}
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
-                required
-              >
-                <option value="練習">練習</option>
-                <option value="試合">試合</option>
-                <option value="体験会">体験会</option>
-                <option value="合宿">合宿</option>
-                <option value="学校行事">学校行事</option>
-                <option value="その他">その他</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>メイン場所*</label>
+              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>{activeTab === 'team' ? 'メイン場所*' : '行事名/場所*'}</label>
               <input 
                 type="text" 
                 list="location-suggestions"
                 value={newSchedule.location} 
                 onChange={(e) => setNewSchedule({...newSchedule, location: e.target.value})}
-                placeholder="例：遊水地"
+                placeholder={activeTab === 'team' ? "例：遊水地" : "例：菊名小 修学旅行"}
                 style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
                 required
               />
@@ -396,8 +474,9 @@ const ScheduleManager: React.FC = () => {
                 {(suggestions.location || []).map(loc => <option key={loc} value={loc} />)}
               </datalist>
             </div>
+
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>対象</label>
+              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>対象学年</label>
               <select 
                 value={newSchedule.target} 
                 onChange={(e) => setNewSchedule({...newSchedule, target: e.target.value})}
@@ -410,118 +489,102 @@ const ScheduleManager: React.FC = () => {
               </select>
             </div>
 
-            <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #ccc', paddingTop: '1rem', marginTop: '0.5rem' }}>
-              <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>🏆 試合詳細情報（試合の場合のみ・任意）</h4>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>大会名</label>
-              <input 
-                type="text" 
-                list="tournament-suggestions"
-                value={newSchedule.tournament_name} 
-                onChange={(e) => setNewSchedule({...newSchedule, tournament_name: e.target.value})}
-                placeholder="例：春季大会"
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
-              />
-              <datalist id="tournament-suggestions">
-                {(suggestions.tournament_name || []).map(t => <option key={t} value={t} />)}
-              </datalist>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>対戦相手</label>
-              <input 
-                type="text" 
-                list="opponent-suggestions"
-                value={newSchedule.opponent} 
-                onChange={(e) => setNewSchedule({...newSchedule, opponent: e.target.value})}
-                placeholder="例：ライオンズ"
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
-              />
-              <datalist id="opponent-suggestions">
-                {(suggestions.opponent || []).map(o => <option key={o} value={o} />)}
-              </datalist>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-              <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={newSchedule.referee_needed} 
-                  onChange={(e) => setNewSchedule({...newSchedule, referee_needed: e.target.checked})}
-                  style={{ marginRight: '0.5rem', width: '18px', height: '18px' }}
-                />
-                審判の派遣が必要
-              </label>
-            </div>
+            {activeTab === 'team' && (
+              <>
+                <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #ccc', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                  <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>🏆 試合詳細情報（試合の場合のみ・任意）</h4>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>大会名</label>
+                  <input 
+                    type="text" 
+                    list="tournament-suggestions"
+                    value={newSchedule.tournament_name} 
+                    onChange={(e) => setNewSchedule({...newSchedule, tournament_name: e.target.value})}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+                  />
+                  <datalist id="tournament-suggestions">
+                    {(suggestions.tournament_name || []).map(t => <option key={t} value={t} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>対戦相手</label>
+                  <input 
+                    type="text" 
+                    list="opponent-suggestions"
+                    value={newSchedule.opponent} 
+                    onChange={(e) => setNewSchedule({...newSchedule, opponent: e.target.value})}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+                  />
+                  <datalist id="opponent-suggestions">
+                    {(suggestions.opponent || []).map(o => <option key={o} value={o} />)}
+                  </datalist>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={newSchedule.referee_needed} 
+                      onChange={(e) => setNewSchedule({...newSchedule, referee_needed: e.target.checked})}
+                      style={{ marginRight: '0.5rem', width: '18px', height: '18px' }}
+                    />
+                    審判派遣が必要
+                  </label>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={newSchedule.has_lunch} 
+                      onChange={(e) => setNewSchedule({...newSchedule, has_lunch: e.target.checked})}
+                      style={{ marginRight: '0.5rem', width: '18px', height: '18px' }}
+                    />
+                    🍱 弁当必要
+                  </label>
+                </div>
+
+                <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #ccc', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                  <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>🚗 移動・配車情報</h4>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>出発地</label>
+                  <input type="text" value={newSchedule.location_from} onChange={(e) => setNewSchedule({...newSchedule, location_from: e.target.value})} style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>到着地</label>
+                  <input type="text" value={newSchedule.location_to} onChange={(e) => setNewSchedule({...newSchedule, location_to: e.target.value})} style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>配車時間</label>
+                  <input type="time" value={newSchedule.meeting_time_car} onChange={(e) => setNewSchedule({...newSchedule, meeting_time_car: e.target.value})} style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }} />
+                </div>
+              </>
+            )}
 
             <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #ccc', paddingTop: '1rem', marginTop: '0.5rem' }}>
-              <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>🚗 移動・配車情報（遠征時のみ・任意）</h4>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>出発地</label>
-              <input 
-                type="text" 
-                list="location-suggestions"
-                value={newSchedule.location_from} 
-                onChange={(e) => setNewSchedule({...newSchedule, location_from: e.target.value})}
-                placeholder="例：遊水地"
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>到着地</label>
-              <input 
-                type="text" 
-                list="location-suggestions"
-                value={newSchedule.location_to} 
-                onChange={(e) => setNewSchedule({...newSchedule, location_to: e.target.value})}
-                placeholder="例：馬場小"
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>配車集合時間</label>
-              <input 
-                type="time" 
-                value={newSchedule.meeting_time_car} 
-                onChange={(e) => setNewSchedule({...newSchedule, meeting_time_car: e.target.value})}
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '4px', border: '1px solid #ddd' }}
-              />
-            </div>
-
-            <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #ccc', paddingTop: '1rem', marginTop: '0.5rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>備考・詳細（任意）</label>
+              <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>備考・詳細</label>
               <textarea 
                 value={newSchedule.description} 
                 onChange={(e) => setNewSchedule({...newSchedule, description: e.target.value})}
-                placeholder="持ち物、雨天時の対応、弁当の有無など"
+                placeholder="持ち物、注意事項など"
                 style={{ width: '100%', padding: '0.8rem', borderRadius: '4px', border: '1px solid #ddd', minHeight: '80px' }}
               />
             </div>
 
             <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-              {editingSchedule && (
-                <button type="button" className="btn-secondary" onClick={handleCancelEdit} style={{ padding: '0.8rem 2rem' }}>キャンセル</button>
-              )}
-              <button 
-                type="submit" 
-                className="btn-primary" 
-                style={{ padding: '0.8rem 2rem', fontSize: '1rem', opacity: (!newSchedule.date || !newSchedule.location) ? 0.6 : 1 }}
-              >
-                {editingSchedule ? '変更を保存する' : '予定を登録する'}
+              <button type="button" className="btn-secondary" onClick={handleCancelEdit}>キャンセル</button>
+              <button type="submit" className={activeTab === 'team' ? "btn-primary" : "btn-warning"}>
+                {editingSchedule ? '保存' : '登録'}
               </button>
             </div>
           </div>
         </form>
       )}
 
-      <div className="filter-bar" style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', background: '#fff', padding: '1rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+      <div className="filter-bar" style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', background: '#fff', padding: '1rem', borderRadius: '8px' }}>
         <div>
           <label style={{ display: 'block', fontSize: '0.7rem', color: '#888' }}>開始日</label>
           <input type="date" value={filter.startDate} onChange={e => setFilter({...filter, startDate: e.target.value})} style={{ padding: '0.4rem', border: '1px solid #ddd', borderRadius: '4px' }} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.7rem', color: '#888' }}>終了日</label>
-          <input type="date" value={filter.endDate} onChange={e => setFilter({...filter, endDate: e.target.value})} style={{ padding: '0.4rem', border: '1px solid #ddd', borderRadius: '4px' }} />
         </div>
         <div>
           <label style={{ display: 'block', fontSize: '0.7rem', color: '#888' }}>対象</label>
@@ -529,30 +592,16 @@ const ScheduleManager: React.FC = () => {
             <option value="all">全て</option>
             <option value="regular">レギュラー</option>
             <option value="junior">ジュニア</option>
-            <option value="u5">5年以下</option>
           </select>
         </div>
-        <div style={{ color: '#888', fontSize: '0.8rem', marginRight: 'auto' }}>
-          {filteredSchedules.length} 件
-        </div>
+        <div style={{ marginRight: 'auto' }}></div>
         <button 
           onClick={handleCopyText} 
           disabled={copying || filteredSchedules.length === 0}
-          style={{ 
-            background: '#00B900', // LINE Green
-            color: 'white', 
-            border: 'none', 
-            padding: '0.5rem 1rem', 
-            borderRadius: '20px', 
-            fontWeight: 'bold',
-            cursor: (copying || filteredSchedules.length === 0) ? 'not-allowed' : 'pointer',
-            opacity: (copying || filteredSchedules.length === 0) ? 0.6 : 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
+          className="btn-line"
+          style={{ background: '#00B900', color: 'white', border: 'none', padding: '0.5rem 1.2rem', borderRadius: '20px', fontWeight: 'bold' }}
         >
-          {copying ? '⏳ コピー中...' : '📋 LINE配信用にコピー'}
+          {activeTab === 'team' ? '📋 チーム予定をコピー' : '🏫 行事予定をコピー'}
         </button>
       </div>
 
@@ -563,9 +612,16 @@ const ScheduleManager: React.FC = () => {
           <table className="dense-table">
             <thead>
               <tr>
+                <th style={{ width: '30px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={selectedIds.length > 0 && selectedIds.length === filteredSchedules.length}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th>日付</th>
-                <th>集合</th>
-                <th>種別</th>
+                {activeTab === 'team' && <th>集合</th>}
+                <th>{activeTab === 'team' ? '種別' : '内容'}</th>
                 <th>場所 / 詳細</th>
                 <th>対象</th>
                 <th>備考</th>
@@ -574,40 +630,43 @@ const ScheduleManager: React.FC = () => {
             </thead>
             <tbody>
               {paginatedSchedules.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', color: '#999' }}>条件に合う予定はありません</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', color: '#999' }}>予定はありません</td></tr>
               ) : (
                 paginatedSchedules.map((s) => (
-                  <tr key={s.id} style={{ background: editingSchedule?.id === s.id ? '#fff3cd' : 'transparent', fontSize: '0.9rem' }}>
-                    <td style={{ whiteSpace: 'nowrap', fontWeight: 700 }}>{formatScheduleDate(s.date)}</td>
-                    <td style={{ color: 'var(--primary)', fontWeight: 700 }}>{s.meeting_time || '-'}</td>
+                  <tr key={s.id} style={{ background: editingSchedule?.id === s.id ? '#fff3cd' : 'transparent' }}>
                     <td>
-                      <span className={`badge ${s.type === '試合' ? 'badge-danger' : s.type === '学校行事' ? 'badge-warning' : s.type === '練習' ? 'badge-primary' : 'badge-success'}`} style={{ fontSize: '0.7rem' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.includes(s.id)}
+                        onChange={() => toggleSelectSchedule(s.id)}
+                      />
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', fontWeight: 700 }}>{formatScheduleDate(s.date)}</td>
+                    {activeTab === 'team' && <td style={{ color: 'var(--primary)', fontWeight: 700 }}>{s.meeting_time || '-'}</td>}
+                    <td>
+                      <span className={`badge ${s.type === '試合' ? 'badge-danger' : s.type === '練習' ? 'badge-primary' : 'badge-warning'}`}>
                         {s.type}
                       </span>
                     </td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{s.location}</div>
-                      {s.tournament_name && <div style={{ fontSize: '0.7rem', color: '#666' }}>{s.tournament_name} {s.opponent ? `vs ${s.opponent}` : ''}</div>}
+                      {s.tournament_name && <div style={{ fontSize: '0.7rem', color: '#666' }}>{s.tournament_name}</div>}
                     </td>
                     <td>{s.target_categories?.join(', ') || '全員'}</td>
-                    <td style={{ fontSize: '0.75rem', maxWidth: '200px', color: '#666' }}>
-                      {s.ai_change_comment && <div style={{ color: '#856404', fontStyle: 'italic' }}>✨ {s.ai_change_comment}</div>}
+                    <td style={{ fontSize: '0.75rem', color: '#666' }}>
+                      {s.has_lunch && <span style={{ color: '#e63946', fontWeight: 'bold', marginRight: '0.5rem' }}>[🍱弁当]</span>}
                       {s.description}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button onClick={() => handleEditClick(s)} style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>編集</button>
+                        {activeTab === 'team' && <button className="btn-secondary" onClick={() => handleViewAttendance(s)} style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>出欠</button>}
                         <button 
-                          onClick={() => handleEditClick(s)}
-                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                          className="btn-secondary" 
+                          onClick={() => handleDeleteSchedule(s.id, s.date)} 
+                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', background: '#fff1f0', color: '#cf1322', border: '1px solid #ffa39e' }}
                         >
-                          編集
-                        </button>
-                        <button 
-                          className="btn-secondary"
-                          onClick={() => handleViewAttendance(s)}
-                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
-                        >
-                          📊 出欠
+                          削除
                         </button>
                       </div>
                     </td>
