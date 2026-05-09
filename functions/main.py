@@ -1,15 +1,17 @@
 import os
 import json
 import logging
-from firebase_functions import https_fn, options
+import base64
+from firebase_functions import https_fn, options, scheduler_fn
 from firebase_admin import initialize_app
 from services.gemini_service import GeminiService
 from services.line_service import LineService
 from services.firestore_service import FirestoreService
 from services.sheets_service import SheetsService
 from services.log_service import LogService
+from services.mail_service import MailService
 from utils.signature import verify_line_signature
-from config import config, LINE_CHANNEL_SECRET_KEY, LINE_CHANNEL_ACCESS_TOKEN_KEY, GEMINI_API_KEY_KEY
+from config import config, LINE_CHANNEL_SECRET_KEY, LINE_CHANNEL_ACCESS_TOKEN_KEY, GEMINI_API_KEY_KEY, GMAIL_CREDENTIALS_JSON_KEY
 
 options.set_global_options(
     region="us-central1"
@@ -358,7 +360,16 @@ def member_linkage(req: https_fn.Request) -> https_fn.Response:
                 except:
                     return https_fn.Response(json.dumps({"status": "error", "message": "Invalid JSON"}), status=400, mimetype="application/json")
             
-            fs.link_member(data["member_id"], data["line_user_id"])
+            line = LineService()
+            line_user_id = data["line_user_id"]
+            line_display_name = None
+            try:
+                profile = line.get_profile(line_user_id)
+                line_display_name = profile.get("displayName")
+            except Exception as e:
+                logging.warning(f"Could not fetch LINE profile for {line_user_id}: {e}")
+
+            fs.link_member(data["member_id"], line_user_id, line_display_name)
             return https_fn.Response(json.dumps({"status": "success"}), mimetype="application/json")
     except Exception as e:
         return https_fn.Response(json.dumps({"status": "error", "message": str(e)}), status=500, mimetype="application/json")
@@ -496,3 +507,60 @@ def broadcast_message(req: https_fn.Request) -> https_fn.Response:
     except Exception as e:
         logging.error(f"Broadcast error: {str(e)}")
         return https_fn.Response(str(e), status=500)
+
+@scheduler_fn.on_schedule(
+    schedule="every 10 minutes",
+    secrets=[GMAIL_CREDENTIALS_JSON_KEY, GEMINI_API_KEY_KEY, LINE_CHANNEL_ACCESS_TOKEN_KEY]
+)
+def check_gmail_trial_requests(event: scheduler_fn.ScheduledEvent) -> None:
+    """Periodically checks for new trial request emails and notifies admin."""
+    _check_gmail_trial_requests_logic()
+
+def _check_gmail_trial_requests_logic() -> None:
+    """Internal logic for checking Gmail trial requests."""
+    try:
+        logging.info("Starting scheduled Gmail check...")
+        mail_service = MailService(config.gmail_credentials_json)
+        if not mail_service.service:
+            logging.error("MailService initialization failed in scheduled task.")
+            return
+
+        # Search for unread messages sent to the mailing list
+        query = f"is:unread to:{config.mailing_list_email}"
+        messages = mail_service.list_messages(query=query, max_results=10)
+        
+        if not messages:
+            logging.info("No new trial request emails found.")
+            return
+
+        gemini = GeminiService()
+        line = LineService()
+        log_service = LogService()
+
+        for msg in messages:
+            msg_id = msg['id']
+            email_content = mail_service.get_message_content(msg_id)
+            
+            if not email_content:
+                continue
+                
+            # Analyze with Gemini
+            trial_info = gemini.extract_trial_info(email_content)
+            
+            if "error" in trial_info:
+                logging.error(f"Gemini analysis failed for {msg_id}: {trial_info['error']}")
+                continue
+                
+            # Notify admin via LINE
+            message_to_admin = trial_info.get("message", "新しい体験希望メールを受信しました！")
+            line.send_admin_notification(message_to_admin)
+            
+            # Record log
+            log_service.record_action("MAIL_DETECTION", f"Trial request: {trial_info['data'].get('name', 'Unknown')}", "SYSTEM")
+            
+            # Mark as read
+            mail_service.mark_as_read(msg_id)
+            logging.info(f"Processed and marked as read: {msg_id}")
+
+    except Exception as e:
+        logging.error(f"Scheduled Gmail check error: {str(e)}", exc_info=True)

@@ -124,9 +124,12 @@ class FirestoreService:
             logging.error(f"Error fetching unlinked members: {str(e)}", exc_info=True)
             return []
 
-    def link_member(self, member_id: str, line_user_id: str):
+    def link_member(self, member_id: str, line_user_id: str, line_display_name: Optional[str] = None):
         try:
-            self.db.collection("members").document(member_id).update({"line_user_id": line_user_id})
+            update_data = {"line_user_id": line_user_id}
+            if line_display_name:
+                update_data["line_display_name"] = line_display_name
+            self.db.collection("members").document(member_id).update(update_data)
         except Exception as e:
             logging.error(f"Error linking member {member_id}: {str(e)}", exc_info=True)
 

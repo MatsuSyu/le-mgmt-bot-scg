@@ -4,6 +4,7 @@ import os
 LINE_CHANNEL_SECRET_KEY = "LINE_CHANNEL_SECRET"
 LINE_CHANNEL_ACCESS_TOKEN_KEY = "LINE_CHANNEL_ACCESS_TOKEN"
 GEMINI_API_KEY_KEY = "GEMINI_API_KEY"
+GMAIL_CREDENTIALS_JSON_KEY = "GMAIL_CREDENTIALS_JSON"
 
 # These will be available as environment variables when using secrets in Functions Gen 2
 class Config:
@@ -20,6 +21,10 @@ class Config:
         return os.environ.get(GEMINI_API_KEY_KEY, "")
 
     @property
+    def gmail_credentials_json(self) -> str:
+        return os.environ.get(GMAIL_CREDENTIALS_JSON_KEY, "")
+
+    @property
     def line_admin_group_id(self) -> str:
         return os.environ.get("LINE_ADMIN_GROUP_ID", "")
 
@@ -30,5 +35,9 @@ class Config:
     @property
     def gemini_model(self) -> str:
         return os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
+
+    @property
+    def mailing_list_email(self) -> str:
+        return os.environ.get("MAILING_LIST_EMAIL", "littleeagles1976@googlegroups.com")
 
 config = Config()

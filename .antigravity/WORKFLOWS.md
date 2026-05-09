@@ -16,8 +16,16 @@
   4. [Action] 更新結果をFirestoreへ保存（必要に応じ `sheet_sync` でスプレッドシートへ再同期）
 
 - **WF-DEV: 開発・ビルド・デプロイフロー（AIエディタ遵守事項）**
-  1. [Action] ローカルでのコーディング実装完了
+  1. [Action] コーディング完了後、変更されたファイルパスを確認する
   2. [Check] Testerエージェントによる自動テスト（`pytest`等）の全件実行・パス確認
-  3. [Action] DeployerエージェントによるGitコミット & GitHubへの `push`
-  4. [Action] Deployerエージェントによるビルドの実行（`npm run build`等、デプロイ前の必須処理）
-  5. [Action] DeployerエージェントによるFirebaseへのデプロイ (`firebase deploy`)
+  3. [Action] Gitコミット & GitHubへの `push`
+  4. [Branch] 変更パスに応じたビルド・デプロイの実行（複数該当時は全て実施）:
+     - **Case: `admin-dashboard/src/` または `public/` の変更**
+       - `cd admin-dashboard && npm run build` を実行
+       - `firebase deploy --only hosting:admin` を実行
+     - **Case: `liff-app/src/` または `public/` の変更**
+       - `cd liff-app && npm run build` を実行
+       - `firebase deploy --only hosting:liff` を実行
+     - **Case: `functions/` 以下の変更（`tests/` を除く）**
+       - `firebase deploy --only functions` を実行
+  5. [Verify] デプロイ完了後、Hosting URL等の実環境へアクセスし、変更が反映されていることを「目視」で確認する

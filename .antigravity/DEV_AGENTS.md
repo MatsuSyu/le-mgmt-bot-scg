@@ -43,6 +43,15 @@ AIエディタ（Antigravity等）が開発タスクを実行する際、単一�
 ### ④ ユーザー体験・ローカライズ (UX & Localization)
 - ボタン、ラベル、プレースホルダ、AIコメントが全て日本語化されているか。
 - 「保存中...」「同期中...」など、非同期処理の進捗がユーザーにフィードバックされているか。
+- **特にUIの変更を伴う場合、Firebase Hostingへの反映（ビルド・デプロイ）が必須であることを認識しているか。**
+
+### ⑤ リリース整合性 (Deployment & Release Integrity)
+- **フロントエンド修正時**: `admin-dashboard` または `liff-app` の修正時、対象ディレクトリで `npm run build` を実行し、`dist` が最新化されているか。
+- **マルチターゲット指定**: 
+  - Admin修正 -> `firebase deploy --only hosting:admin`
+  - LIFF修正 -> `firebase deploy --only hosting:liff`
+  - Functions修正 -> `firebase deploy --only functions`
+- **実機・環境確認**: デプロイ完了後、Hosting URLにアクセスし、意図したUI変更が「実際に」反映されているかを確認したか。（ローカル確認だけで満足しないこと）
 
 ---
 
@@ -73,4 +82,5 @@ AIエディタ（Antigravity等）が開発タスクを実行する際、単一�
 - **行動指針**:
   - TesterおよびLibrarianの完了報告を確認し、全テストのパスとドキュメントの最新化をリリースの絶対条件とする。
   - 変更内容を要約し、プロジェクトの規約に沿った適切なメッセージでGitHubへ `commit` & `push` を行う。
-  - Firebase CLI (`firebase deploy`) 等を用いて、検証済みのコードのみを本番またはステージング環境へ反映させる。
+  - Firebase CLI (`firebase deploy`) 等を用いて、検証済みのコードのみを環境へ反映させる。
+  - **Hostingデプロイ時は、必ず事前に `npm run build` を経由したか、およびデプロイ後のURLで「表示の更新」を確認したかを報告に含めること。**
