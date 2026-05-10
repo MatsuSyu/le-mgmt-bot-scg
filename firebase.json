@@ -19,6 +19,34 @@
       ],
       "rewrites": [
         {
+          "source": "/api/get_line_profile",
+          "function": "get_line_profile"
+        },
+        {
+          "source": "/api/member_linkage",
+          "function": "member_linkage"
+        },
+        {
+          "source": "/api/update_schedule_admin",
+          "function": "update_schedule_admin"
+        },
+        {
+          "source": "/api/get_unique_suggestions",
+          "function": "get_unique_suggestions"
+        },
+        {
+          "source": "/api/get_active_schedules",
+          "function": "get_active_schedules"
+        },
+        {
+          "source": "/api/broadcast_message",
+          "function": "broadcast_message"
+        },
+        {
+          "source": "/api/init_liff_app",
+          "function": "init_liff_app"
+        },
+        {
           "source": "**",
           "destination": "/index.html"
         }
