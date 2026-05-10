@@ -95,3 +95,14 @@ class LineService:
         except Exception as e:
             logging.error(f"Failed to get LINE profile: {str(e)}")
             return {}
+
+    def send_error_notification(self, error_message: str) -> bool:
+        """
+        Sends an emergency error notification to the administrator's private LINE account.
+        """
+        admin_id = config.line_admin_user_id
+        if not admin_id:
+            return False
+            
+        alert_msg = f"⚠️【システムアラート】\nエラーが発生しました:\n{error_message}"
+        return self.push_message(admin_id, alert_msg)

@@ -220,3 +220,24 @@ button {
 .btn-secondary:hover {
   background-color: #e9ecef;
 }
+
+/* Loading Overlay for Lazy Components */
+.loading-overlay {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  width: 100%;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

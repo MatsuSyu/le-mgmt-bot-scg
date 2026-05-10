@@ -1,7 +1,7 @@
 firebase-functions>=0.1.0
 firebase-admin>=6.2.0
 google-cloud-firestore>=2.11.1
-google-generativeai>=0.7.2
+google-genai>=0.1.0
 line-bot-sdk>=3.0.0
 requests>=2.31.0
 google-api-python-client>=2.100.0

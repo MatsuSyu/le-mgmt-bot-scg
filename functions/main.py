@@ -11,7 +11,7 @@ from services.sheets_service import SheetsService
 from services.log_service import LogService
 from services.mail_service import MailService
 from utils.signature import verify_line_signature
-from config import config, LINE_CHANNEL_SECRET_KEY, LINE_CHANNEL_ACCESS_TOKEN_KEY, GEMINI_API_KEY_KEY, GMAIL_CREDENTIALS_JSON_KEY
+from config import config, LINE_CHANNEL_SECRET_KEY, LINE_CHANNEL_ACCESS_TOKEN_KEY, GEMINI_API_KEY_KEY, GMAIL_CREDENTIALS_JSON_KEY, LINE_ADMIN_USER_ID_KEY
 
 options.set_global_options(
     region="us-central1"
@@ -453,13 +453,23 @@ def get_line_profile(req: https_fn.Request) -> https_fn.Response:
         profile = line.get_profile(user_id)
         
         if not profile or "displayName" not in profile:
-            logging.error(f"Failed to fetch profile for {user_id}. Response: {profile}")
-            return https_fn.Response(json.dumps({"error": "Profile not found"}), status=404, mimetype="application/json")
+            logging.warning(f"Failed to fetch profile for {user_id}. Returning placeholder.")
+            # Return a graceful fallback instead of an error
+            return https_fn.Response(json.dumps({
+                "userId": user_id,
+                "displayName": "未連携(LINE設定等)",
+                "pictureUrl": "",
+                "statusMessage": "プロフィールを取得できませんでした。友だち登録状況やLINE側の制限を確認してください。"
+            }, ensure_ascii=False), mimetype="application/json")
 
         return https_fn.Response(json.dumps(profile, ensure_ascii=False), mimetype="application/json")
     except Exception as e:
         logging.error(f"Get profile error for {user_id if 'user_id' in locals() else 'unknown'}: {str(e)}", exc_info=True)
-        return https_fn.Response(str(e), status=500)
+        return https_fn.Response(json.dumps({
+            "error": "internal_error",
+            "displayName": "取得失敗(システム)",
+            "message": str(e)
+        }), status=200, mimetype="application/json")
 
 @https_fn.on_request(
     secrets=[LINE_CHANNEL_ACCESS_TOKEN_KEY],

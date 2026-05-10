@@ -87,6 +87,8 @@ const MemberManager: React.FC = () => {
           role = 'coach';
         } else if (roleLower.includes('母') || roleLower.includes('父') || roleLower.includes('保護者') || roleLower.includes('parent')) {
           role = 'parent';
+        } else if (roleLower.includes('管理者') || roleLower.includes('admin')) {
+          role = 'admin';
         } else if (roleLower.includes('選手') || roleLower.includes('player')) {
           role = 'player';
         }
@@ -210,21 +212,24 @@ const MemberManager: React.FC = () => {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/get_line_profile?user_id=${lineUserId}`);
       if (response.ok) {
         const profile = await response.json();
-        if (profile.displayName) {
-          await setDoc(doc(db, "members", memberId), {
-            line_display_name: profile.displayName,
-            updated_at: new Date()
-          }, { merge: true });
-          alert(`LINE名を更新しました: ${profile.displayName}`);
+        const displayName = profile.displayName || "名前未取得";
+        
+        await setDoc(doc(db, "members", memberId), {
+          line_display_name: displayName,
+          updated_at: new Date()
+        }, { merge: true });
+
+        if (displayName.includes("未連携") || displayName.includes("取得失敗")) {
+          alert(`LINE名の取得を試みましたが、情報を取得できませんでした。\n理由: ${profile.statusMessage || "LINE側の制限など"}\n\nユーザー側でボットをブロックしているか、まだメッセージを送信していない可能性があります。`);
         } else {
-          alert("LINEプロフィール情報が取得できませんでした（友だち登録が解除されている可能性があります）。");
+          alert(`LINE名を更新しました: ${displayName}`);
         }
       } else {
-        alert("LINEプロフィールの取得に失敗しました。");
+        alert("サーバーとの通信に失敗しました。時間をおいて再度お試しください。");
       }
     } catch (err) {
       console.error(err);
-      alert("通信エラーが発生しました。");
+      alert("通信エラーが発生しました。ネットワーク設定を確認してください。");
     }
   };
 
@@ -317,6 +322,7 @@ const MemberManager: React.FC = () => {
                 <option value="coach">指導者</option>
                 <option value="parent">保護者</option>
                 <option value="coach_parent">指導者 兼 保護者</option>
+                <option value="admin">管理者</option>
               </select>
             </div>
 
@@ -496,11 +502,13 @@ const MemberManager: React.FC = () => {
                       <span className={`badge ${
                         m.role === 'coach' ? 'badge-danger' : 
                         m.role === 'parent' ? 'badge-primary' : 
-                        m.role === 'coach_parent' ? 'badge-warning' : 'badge-success'
+                        m.role === 'coach_parent' ? 'badge-warning' : 
+                        m.role === 'admin' ? 'badge-info' : 'badge-success'
                       }`} style={{ fontSize: '0.65rem' }}>
                         {m.role === 'coach' ? '指導者' : 
                          m.role === 'parent' ? '保護者' : 
-                         m.role === 'coach_parent' ? '指導者/保護者' : '選手'}
+                         m.role === 'coach_parent' ? '指導者/保護者' : 
+                         m.role === 'admin' ? '管理者' : '選手'}
                       </span>
                       {m.number && <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>#{m.number}</div>}
                     </td>

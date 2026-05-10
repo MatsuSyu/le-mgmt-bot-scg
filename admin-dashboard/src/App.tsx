@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { collection, query, onSnapshot } from 'firebase/firestore'
 import AttendanceSummary from './components/AttendanceSummary'
-import AttendanceTable from './components/AttendanceTable'
-import LogViewer from './components/LogViewer'
-import MemberManager from './components/MemberManager'
-import ScheduleManager from './components/ScheduleManager'
-import CarManager from './components/CarManager'
-import GroundManager from './components/GroundManager'
-import BroadcastManager from './components/BroadcastManager'
 import { db } from './firebase'
 import './index.css'
+
+// Dynamic imports for code splitting
+const AttendanceTable = lazy(() => import('./components/AttendanceTable'))
+const LogViewer = lazy(() => import('./components/LogViewer'))
+const MemberManager = lazy(() => import('./components/MemberManager'))
+const ScheduleManager = lazy(() => import('./components/ScheduleManager'))
+const CarManager = lazy(() => import('./components/CarManager'))
+const GroundManager = lazy(() => import('./components/GroundManager'))
+const BroadcastManager = lazy(() => import('./components/BroadcastManager'))
 
 function App() {
   const [activeTab, setActiveTab] = useState('home')
@@ -59,33 +61,39 @@ function App() {
   const carpoolShortage = Math.max(0, wantRideCount - seatsAvailable)
 
   const renderContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return (
-          <>
-            <AttendanceSummary 
-              present={presentCount} 
-              absent={absentCount} 
-              total={records.length} 
-              carpoolShortage={carpoolShortage}
-            />
-            <AttendanceTable records={records} members={members} schedules={schedules} />
-            <LogViewer members={members} />
-          </>
-        )
-      case 'members':
-        return <MemberManager />
-      case 'schedules':
-        return <ScheduleManager />
-      case 'cars':
-        return <CarManager />
-      case 'grounds':
-        return <GroundManager />
-      case 'broadcast':
-        return <BroadcastManager />
-      default:
-        return null
-    }
+    return (
+      <Suspense fallback={<div className="loading-overlay">⏳ 読み込み中...</div>}>
+        {(() => {
+          switch (activeTab) {
+            case 'home':
+              return (
+                <>
+                  <AttendanceSummary 
+                    present={presentCount} 
+                    absent={absentCount} 
+                    total={records.length} 
+                    carpoolShortage={carpoolShortage}
+                  />
+                  <AttendanceTable records={records} members={members} schedules={schedules} />
+                  <LogViewer members={members} />
+                </>
+              )
+            case 'members':
+              return <MemberManager />
+            case 'schedules':
+              return <ScheduleManager />
+            case 'cars':
+              return <CarManager />
+            case 'grounds':
+              return <GroundManager />
+            case 'broadcast':
+              return <BroadcastManager />
+            default:
+              return null
+          }
+        })()}
+      </Suspense>
+    )
   }
 
   const [syncing, setSyncing] = useState(false)
